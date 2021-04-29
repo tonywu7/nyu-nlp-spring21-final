@@ -1,0 +1,14 @@
+click==7.1.2
+greenlet==1.0.0
+joblib==1.0.1
+langdetect==1.0.8
+more-itertools==8.7.0
+nltk==3.6.2
+regex==2021.4.4
+simplejson==3.17.2
+six==1.15.0
+SQLAlchemy==1.4.10
+termcolor==1.1.0
+tqdm==4.60.0
+udatetime==0.0.16
+Unidecode==1.2.0
