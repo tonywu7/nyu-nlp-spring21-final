@@ -1,0 +1,76 @@
+# Copyright 2021 Tony Wu +https://github.com/tonywu7/
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import annotations
+
+import uuid
+from itertools import chain
+from typing import Dict, List
+
+from sqlalchemy import Column, types
+
+from .util.database import BundleABC, Identity, Relationship, UUIDType
+
+VERSION = '0.0.1'
+
+
+class Database(BundleABC):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        global db
+        db = self
+
+    @property
+    def version(self):
+        return VERSION
+
+    def delete_orphans(self):
+        songs = (
+            self.query(Song).join(Song.playlists, isouter=True)
+            .filter(Playlist.id.is_(None)).all()
+        )
+        playlists = (
+            self.query(Playlist).join(Playlist.songs, isouter=True)
+            .filter(Song.id.is_(None)).all()
+        )
+        for item in chain(songs, playlists):
+            db.session.delete(item)
+
+
+def get_db() -> Database:
+    return db
+
+
+class Song(Identity):
+    title: str = Column(types.String(), nullable=False)
+    artist: str = Column(types.String())
+    album: str = Column(types.String())
+
+    lyrics: str = Column(types.String())
+    stats: Dict = Column(types.JSON())
+
+    playlists: List[Playlist] = Relationship.two_way(dict(playlists='Playlist', songs='Song'))['playlists']
+
+    id_musicbrainz: uuid.UUID = Column(UUIDType())
+    id_genius: int = Column(types.Integer())
+
+
+class Playlist(Identity):
+    title: str = Column(types.String(), nullable=False)
+
+    songs = Relationship.two_way(dict(playlists='Playlist', songs='Song'))['songs']
+
+
+class AcousticBrainzFeatures:
+    pass
