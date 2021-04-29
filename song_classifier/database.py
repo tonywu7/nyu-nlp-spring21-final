@@ -84,6 +84,12 @@ class Database(BundleABC):
     def song_lyrics_search(self, query: str) -> List[Song]:
         return self.fts.query(f'identity_model:Song AND song_lyrics:{self.fts.tokenized(query)}').all()
 
+    def total_songs(self) -> int:
+        return self.query(Song).count()
+
+    def total_playlists(self) -> int:
+        return self.query(Playlist).count()
+
 
 def get_db() -> Database:
     return db
