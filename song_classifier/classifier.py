@@ -256,7 +256,8 @@ def parse_documents(source: Iterable[str]) -> DocumentCollection:
 
 def evaluate(queries: DocumentCollection, documents: DocumentCollection, limit=1):
     """Calculate similarity scores for all queries and documents."""
-    for idx, q in enumerate(queries, start=1):
+    for q in queries:
+        idx = q.id
         scores = []
         for d in documents:
             s = similarity_tf_idf(q, d, documents.idf)
@@ -342,17 +343,40 @@ def main():
 
     db = get_db()
     CATEGORIES = ('happy', 'sad', 'relaxed', 'angry')
-    playlists = {k: db.playlist_title_search(k) for k in CATEGORIES}
-    songs = {k: [*chain.from_iterable([p.songs for p in ps])] for k, ps in playlists.items()}
-    training = {k: v[:math.floor(len(v) * 0.8)] for k, v in songs.items()}
-    development = {k: v[math.floor(len(v) * 0.8):] for k, v in songs.items()}
+    KEYWORDS = {
+        'happy': ['happy', 'joy', 'awesome', 'party', 'city', 'love', 'sex', 'summer', 'spring', 'pop', 'yay', 'fun', 'club', 'nightlife', 'dance', 'romance', 'motivational', 'electro', 'beach', 'radio', 'beautiful', 'pretty', 'christmas', 'disco', 'birthday', 'edm', 'energetic', 'festival', 'inspirational', 'jog', 'uplifting', 'training', 'happiness'],
+        'sad': ['sad', 'blues', 'breakup', 'ache', 'wish', 'die', 'alone', 'drowning', 'reminisce', 'funeral', 'dead', 'dark', 'broken', 'remember', 'forget', 'forgot', 'break', 'hope', 'lone', 'depressed', 'depression'],
+        'relaxed': ['relax', 'chill', 'home', 'study', 'night', 'evening', 'high', 'weed', 'reggae', 'jazz', 'piano', 'winter', 'star', 'meditatcalm', 'soft', 'dream', 'work', 'classical', 'rap', 'hiphop', 'hip-hop', 'hip' 'hop', 'late', 'fall', 'autumn', 'sleep', 'asmr', 'country', 'indie', 'tranquil'],
+        'angry': ['fuck', 'bitch', 'angry', 'mad', 'pissed', 'shit', 'rock', 'metal', 'death', 'gym', 'workout', 'hell', 'demon', 'punk', 'devil'],
+    }
+    playlists = {k: [*chain.from_iterable(db.playlist_title_search(t) for t in v)] for k, v in KEYWORDS.items()}
+    songs_reversed = defaultdict(lambda: defaultdict(list))
+    for k, v in playlists.items():
+        for p in v:
+            for s in p.songs:
+                songs_reversed[s][k].append(p)
+    songs = {k: [] for k in CATEGORIES}
+    for s, c in songs_reversed.items():
+        if len(c) > 1:
+            continue
+        for k, ps in c.items():
+            if len(ps) >= 1:
+                songs[k].append(s)
+    # training = {k: v[:math.floor(len(v) * 0.8)] for k, v in songs.items()}
+    # development = {k: v[math.floor(len(v) * 0.8):] for k, v in songs.items()}
+    training = {k: v[:4000] for k, v in songs.items()}
+    development = {k: v[4000:5000] for k, v in songs.items()}
 
     print(f'Training size {sum(len(v) for v in training.values())}')
     print(f'Testing size {sum(len(v) for v in development.values())}')
-    print(f'# songs { {k: len(v) for k, v in songs.items()} }')
+    print(f'# songs { {k: len(training[k]) + len(development[k]) for k in songs} }')
 
     sources = {k: Document() for k in CATEGORIES}
-    targets = {k: DocumentCollection() for k, v in development.items()}
+    targets = DocumentCollection()
+    answers = {}
+    for k, v in development.items():
+        for s in v:
+            answers[s.id] = k
 
     i = 0
     for k, d in sources.items():
@@ -371,29 +395,29 @@ def main():
             d = Document()
             d.id = s.id
             d.text = nltk.tokenize.word_tokenize(s.lyrics)
-            targets[k].add(d)
+            targets.add(d)
 
-    for doc in chain(corpus, *targets.values()):
+    for doc in chain(corpus, targets):
         doc.postprocess_tokens()
         doc.calc_freq()
     corpus.calc_idf()
     corpus.calc_mag(corpus.idf)
-    for queries in targets.values():
-        process_cluster(queries, corpus)
-        queries.calc_mag(corpus.idf)
+    process_cluster(targets, corpus)
+    targets.calc_mag(corpus.idf)
 
     tp = defaultdict(int)
     fp = defaultdict(int)
     fn = defaultdict(int)
 
-    for truth, queries in targets.items():
-        for idx, doc_id, score in evaluate(queries, corpus):
-            prediction = CATEGORIES[doc_id]
-            if truth == prediction:
-                tp[truth] += 1
-            else:
-                fp[prediction] += 1
-                fn[truth] += 1
+    for idx, doc_id, score in evaluate(targets, corpus):
+        prediction = CATEGORIES[doc_id]
+        truth = answers[idx]
+        print(idx, prediction, truth, score)
+        if truth == prediction:
+            tp[truth] += 1
+        else:
+            fp[prediction] += 1
+            fn[truth] += 1
 
     precisions = defaultdict(int)
     recall = defaultdict(int)

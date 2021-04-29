@@ -78,7 +78,7 @@ class Database(BundleABC):
     def song_title_search(self, query: str) -> List[Song]:
         return self.fts.query(f'identity_model:Song AND song_title:{self.fts.tokenized(query)}').all()
 
-    def playlist_title_search(self, query: str) -> List[Song]:
+    def playlist_title_search(self, query: str) -> List[Playlist]:
         return self.fts.query(f'identity_model:Playlist AND playlist_title:{self.fts.tokenized(query)}').all()
 
     def song_lyrics_search(self, query: str) -> List[Song]:
