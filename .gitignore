@@ -133,3 +133,6 @@ dmypy.json
 .temp/
 
 node_modules
+
+*-shm
+*-wal
