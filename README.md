@@ -2,19 +2,24 @@
 
 ## For collaborators
 
-**Lyrics database**
+**Setup**
 
-- Download the latest version of database (from Discord) 
-- Rename the file to `index.db`
-- Place the file in a directory named `instance` at the top-level (next to the
-`song_classifier` folder and the `README.md` file, etc.)
+```
+python3 -m pip install -r requirements.txt
+```
+
+To confirm you have all requirements installed, try printing the program versions:
+
+```
+python3 -m song_classifier version
+```
 
 **Playground**
 
 To run the program in REPL mode:
 
 ```
-python3 -i repl.py instance
+python3 -i repl.py project
 ```
 
 Then you can access the database through the `db` variable:

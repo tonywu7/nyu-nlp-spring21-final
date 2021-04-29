@@ -24,7 +24,7 @@ from .util.settings import Settings
 
 
 @click.group()
-@click.option('-a', '--instance', default='instance', required=True, type=click.Path(exists=True, file_okay=False))
+@click.option('-a', '--instance', default='project', required=True, type=click.Path(exists=True, file_okay=False))
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.pass_context
 def main(ctx, instance, verbose):
