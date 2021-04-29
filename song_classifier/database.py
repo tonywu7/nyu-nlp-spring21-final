@@ -18,9 +18,10 @@ import uuid
 from itertools import chain
 from typing import Dict, List
 
-from sqlalchemy import Column, types
+from sqlalchemy import Column, event, types
 
-from .util.database import BundleABC, Identity, Relationship, UUIDType
+from .util.database import (FTS5, BundleABC, Identity, Relationship, UUIDType,
+                            get_session, metadata)
 
 VERSION = '0.0.1'
 
@@ -30,10 +31,19 @@ class Database(BundleABC):
         super().__init__(*args, **kwargs)
         global db
         db = self
+        self.fts: FTS5
 
     @property
     def version(self):
         return VERSION
+
+    def _init_events(self):
+        super()._init_events()
+        event.listen(metadata, 'after_create', self._init_fts)
+
+    def _init_fts(self, *args, **kwargs):
+        self.fts = FTS5()
+        self.fts.init(get_session)
 
     def delete_orphans(self):
         songs = (
@@ -46,6 +56,33 @@ class Database(BundleABC):
         )
         for item in chain(songs, playlists):
             db.session.delete(item)
+
+    def get_song_by_title(self, title: str) -> Song:
+        return self.query(Song).filter(Song.title == title).first()
+
+    def get_songs_by_title(self, title: str) -> List[Song]:
+        return self.query(Song).filter(Song.title == title).all()
+
+    def get_playlist_by_title(self, title: str) -> Playlist:
+        return self.query(Playlist).filter(Playlist.title == title).first()
+
+    def get_playlists_by_title(self, title: str) -> List[Playlist]:
+        return self.query(Playlist).filter(Playlist.title == title).all()
+
+    def get_all_songs(self) -> List[Song]:
+        return self.query(Song).all()
+
+    def get_all_playlists(self) -> List[Playlist]:
+        return self.query(Playlist).all()
+
+    def song_title_search(self, query: str) -> List[Song]:
+        return self.fts.query(f'identity_model:Song AND song_title:{self.fts.tokenized(query)}').all()
+
+    def playlist_title_search(self, query: str) -> List[Song]:
+        return self.fts.query(f'identity_model:Playlist AND playlist_title:{self.fts.tokenized(query)}').all()
+
+    def song_lyrics_search(self, query: str) -> List[Song]:
+        return self.fts.query(f'identity_model:Song AND song_lyrics:{self.fts.tokenized(query)}').all()
 
 
 def get_db() -> Database:

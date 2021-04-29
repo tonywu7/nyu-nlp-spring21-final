@@ -15,28 +15,41 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from functools import wraps
+from operator import attrgetter, itemgetter
 from sqlite3 import Connection as SQLite3Connection
-from typing import (Any, Dict, List, Optional, Tuple, Type, TypeVar, Union,
-                    overload)
+from typing import (Any, Callable, Dict, List, Optional, Set, Tuple, Type,
+                    TypeVar, Union, overload)
 from urllib.parse import urlencode
 
 import simplejson as json
 import udatetime
+import unidecode
 from sqlalchemy import MetaData, Table, create_engine, event, types
 from sqlalchemy.engine import Connection, Engine, Result
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.associationproxy import (AssociationProxy,
+                                             AssociationProxyInstance)
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.orm import (Mapper, Session, declarative_base, declared_attr,
-                            relationship, scoped_session, sessionmaker)
+from sqlalchemy.inspection import inspect
+from sqlalchemy.orm import (Mapper, Query, RelationshipProperty, Session,
+                            aliased, declarative_base, declared_attr,
+                            relationship, scoped_session, sessionmaker,
+                            with_polymorphic)
 from sqlalchemy.orm.attributes import InstrumentedAttribute
-from sqlalchemy.schema import Column, ForeignKey, Index
+from sqlalchemy.orm.properties import ColumnProperty
+from sqlalchemy.schema import (DDL, Column, ForeignKey, Index,
+                               PrimaryKeyConstraint, UniqueConstraint)
 from sqlalchemy.sql.expression import FunctionElement, column, select, table
 from sqlalchemy.sql.functions import count
+from sqlalchemy.sql.selectable import \
+    LABEL_STYLE_TABLENAME_PLUS_COL as LS_TABLE_COL
 from sqlalchemy.types import CHAR, INTEGER, TypeDecorator
 
 metadata = MetaData(
@@ -223,6 +236,12 @@ class Identity(Base):
 
     def __repr__(self) -> str:
         return f'<{self.discriminator()} at {hex(id(self))}>'
+
+    __reflection__: Reflection
+
+    @classmethod
+    def _init_reflection(cls):
+        cls.__reflection__ = Reflection(cls)
 
 
 class BundleABC(ABC):
@@ -456,3 +475,365 @@ class Relationship:
                 cascade_backrefs=False, **kwargs,
             ),
         }
+
+
+class FTS5:
+    def __init__(self):
+        self.ident = Identity.__reflection__
+        self.polymorph = with_polymorphic(Identity, '*')
+        self.sessionmaker: Callable[[], Session]
+
+        self.selectable = Query(self.polymorph).statement.set_label_style(LS_TABLE_COL)
+        self.columns = self.indexed_columns()
+        self.rowid_c = self.translated(self.ident.mapper.c.id)
+        self.model_c = self.translated(self.ident.mapper.c.model)
+        self.idx_t = self.idx_table(self.ident.mapper)
+        self.idx_p = aliased(Identity, self.idx_t, adapt_on_names=True)
+
+    @property
+    def session(self) -> Session:
+        return self.sessionmaker()
+
+    @property
+    def initialized(self) -> bool:
+        return hasattr(self, 'sessionmaker')
+
+    @property
+    def view_name(self):
+        return 'identity_view'
+
+    @property
+    def idx_name(self):
+        return 'identity_idx'
+
+    def indexed_columns(self) -> List[Column]:
+        return [c for c in self.selectable.subquery().c]
+
+    def translated(self, target: Column) -> Column:
+        for col in self.selectable.subquery().c:
+            if col.base_columns == target.base_columns:
+                return col
+
+    def idx_table(self, mapper: Mapper) -> Table:
+        columns = []
+        for c in mapper.columns:
+            translated = self.translated(c)
+            args = [translated.key, c.type]
+            if translated.foreign_keys:
+                for foreign_key in translated.foreign_keys:
+                    args.append(ForeignKey(foreign_key.column))
+            columns.append(Column(*args, key=c.key, primary_key=c.primary_key))
+        return Table(
+            self.idx_name, metadata,
+            Column('identity_idx', types.String(), key='master'),
+            *columns,
+            keep_existing=True,
+        )
+
+    def polymorphic_view(self) -> DDL:
+        template = """
+        CREATE VIEW IF NOT EXISTS %(name)s
+        AS %(select)s
+        """
+        info = {
+            'name': self.view_name,
+            'select': self.selectable.compile(),
+        }
+        return DDL(template % info)
+
+    def fts_virtual_table(self) -> DDL:
+        template = """
+        CREATE VIRTUAL TABLE IF NOT EXISTS %(name)s
+        USING fts5(%(columns)s, content=%(view_name)s, content_rowid=%(rowid_name)s)
+        """
+        info = {
+            'name': self.idx_name,
+            'columns': ', '.join([c.key for c in self.columns]),
+            'view_name': self.view_name,
+            'rowid_name': self.rowid_c.key,
+        }
+        return DDL(template % info)
+
+    def init(self, sessionmaker: Callable[[], Session]):
+        self.sessionmaker = sessionmaker
+        session = self.session
+        view = self.polymorphic_view()
+        fts = self.fts_virtual_table()
+        view.execute(session.bind)
+        fts.execute(session.bind)
+        event.listen(session, 'before_flush', self.preflush_delete)
+        event.listen(session, 'after_flush', self.postflush_update)
+        session.commit()
+
+    def preflush_delete(self, session: Session, context, instances):
+        ids = [str(item.id) for item in [*session.dirty, *session.deleted]]
+        stmt = """
+        INSERT INTO %(name)s(%(name)s, rowid, %(columns)s)
+        SELECT 'delete', %(rowid_name)s, * FROM %(view_name)s
+        WHERE %(rowid_name)s IN (%(ids)s)
+        """
+        info = {
+            'name': self.idx_name,
+            'columns': ', '.join([c.key for c in self.columns]),
+            'view_name': self.view_name,
+            'rowid_name': self.rowid_c.key,
+            'ids': ', '.join(ids),
+        }
+        session.execute(stmt % info)
+
+    def postflush_update(self, session: Session, context):
+        ids = [str(item.id) for item in [*session.new, *session.dirty]]
+        stmt = """
+        INSERT INTO %(name)s(rowid, %(columns)s)
+        SELECT %(rowid_name)s, * FROM %(view_name)s
+        WHERE %(rowid_name)s IN (%(ids)s)
+        """
+        info = {
+            'name': self.idx_name,
+            'columns': ', '.join([c.key for c in self.columns]),
+            'view_name': self.view_name,
+            'rowid_name': self.rowid_c.key,
+            'ids': ', '.join(ids),
+        }
+        session.execute(stmt % info)
+
+    def destroy(self, session: Optional[Session] = None):
+        session = session or self.session
+        session.execute(f'DROP TABLE IF EXISTS {self.idx_name}')
+        session.execute(f'DROP VIEW IF EXISTS {self.view_name}')
+        session.commit()
+
+    def rebuild(self):
+        session = self.session
+        session.execute(f"INSERT INTO {self.idx_name}({self.idx_name}) VALUES('rebuild');")
+        session.commit()
+
+    def query(self, q: Optional[str] = None) -> Query:
+        clause = self.idx_t.c.id.isnot(None)
+        if q is not None:
+            clause = clause & self.idx_t.c.master.op('match')(q)
+        return self.session.query(self.idx_p).filter(clause)
+
+    def tokenized(self, q: Optional[str] = None) -> str:
+        if q is None:
+            return None
+        return slugify(q, sep='* ') + '*'
+
+    def search(self, q: Optional[str] = None) -> Query:
+        return self.query(self.tokenized(q))
+
+    def instanceof(self, model: Type[T], q: Optional[str] = None) -> Query:
+        desc = [m.entity.__name__ for m in model.__mapper__.self_and_descendants]
+        targets = ' OR '.join([f'{self.model_c.key}:{d}' for d in desc])
+        if q is not None:
+            query = f'({targets}) AND {slugify(q, sep="* ")}*'
+        else:
+            query = f'({targets})'
+        return self.query(query)
+
+    @contextmanager
+    def using_mapper(self, model: Type[T]):
+        try:
+            metadata.remove(self.idx_t)
+            self.idx_t = self.idx_table(inspect(model))
+            self.idx_p = aliased(model, self.idx_t, adapt_on_names=True)
+            yield self.idx_p
+        finally:
+            metadata.remove(self.idx_t)
+            self.idx_t = self.idx_table(inspect(Identity))
+            self.idx_p = aliased(Identity, self.idx_t, adapt_on_names=True)
+
+    def ids(self, q: Optional[str] = None, raw_query=False) -> Query:
+        if not raw_query:
+            q = self.tokenized(q)
+        return self.session.query(self.idx_t.c.id).filter(self.idx_t.c.master.op('match')(q))
+
+    def all(self, model: Type[T], q: Optional[str] = None) -> List[T]:
+        return self.instanceof(model, q).all()
+
+    def lookup(self, model: Type[T], q: Optional[str] = None) -> Query:
+        return self.session.query(model).filter(model.id.in_(self.ids(q)))
+
+
+def slugify(name: str, sep='-', *, limit=0) -> str:
+    t = re.sub(r'[\W_]+', sep, str(unidecode.unidecode(name))).strip(sep).lower()
+    if limit > 0:
+        t = sep.join(t.split(sep)[:limit])
+    return t
+
+
+class Reflection:
+    mapper: Mapper
+    local_table: Table
+    mapped_table: Table
+
+    attributes: Dict[str, InferrableSelectable]
+
+    relationships: Dict[str, RelationshipProperty]
+    proxies: Dict[str, AssociationProxy]
+
+    atypes: Dict[str, Type]
+    ctypes: Dict[str, Type]
+    dtypes: Dict[str, Type]
+
+    autoincrement: Tuple[str, ...]
+    primary_key: Tuple[str, ...]
+    unique_columns: Tuple[Tuple[str, ...], ...]
+
+    polymorphic_on: Optional[Column]
+    polymorphic_ident: Optional[Any]
+
+    ancestral_columns: List[Column]
+    ancestral_identity: List[Column]
+
+    lineage: List[Mapper]
+
+    @property
+    def columns(self) -> Dict[str, Column]:
+        return {c.name: c for c in self.mapper.columns}
+
+    def get_unique_attrs(self, obj):
+        values = []
+        for cols in self.unique_columns:
+            values.append(attrgetter(*cols)(obj))
+        return tuple(values)
+
+    def get_unique_items(self, info):
+        values = []
+        for cols in self.unique_columns:
+            values.append(itemgetter(*cols)(info))
+        return tuple(values)
+
+    @staticmethod
+    def _find_unique_columns(table: Table) -> Tuple[Set[Tuple[Tuple[str, ...], ...]], Optional[Tuple[str, ...]]]:
+        unique = set()
+        primary_key = None
+        for c in table.constraints:
+            cols = tuple(sorted(c.name for c in c.columns))
+            if isinstance(c, PrimaryKeyConstraint):
+                primary_key = cols
+                unique.add(cols)
+            if isinstance(c, UniqueConstraint):
+                unique.add(cols)
+        for i in table.indexes:
+            if i.unique:
+                cols = tuple(sorted(c.name for c in i.columns))
+                unique.add(cols)
+        return unique, primary_key
+
+    @staticmethod
+    def _find_lineage(mapper: Mapper) -> List[Mapper]:
+        line = []
+        while mapper is not None:
+            line.append(mapper)
+            mapper = mapper.inherits
+        return line
+
+    def __init__(self, model: Type):
+        table: Table = model.__table__
+        mapper: Mapper = inspect(model)
+
+        self.mapper = mapper
+        self.local_table = mapper.local_table
+        self.mapped_table = mapper.persist_selectable
+
+        self.ancestral_columns = []
+        self.ancestral_identity = []
+        self.lineage = []
+
+        self.polymorphic_on = None
+        self.polymorphic_ident = None
+
+        unique, primary_key = self._find_unique_columns(table)
+        self.primary_key = primary_key
+        self.unique_columns = tuple(sorted(unique))
+
+        self.polymorphic_on = mapper.polymorphic_on
+        self.polymorphic_ident = mapper.polymorphic_identity
+
+        self.lineage = self._find_lineage(mapper)
+        for t in mapper.tables:
+            if t is table:
+                continue
+            self.ancestral_columns.extend(t.columns)
+            self.ancestral_identity.extend([c for c in t.columns if c.primary_key])
+
+        self.relationships = {r.key: r for r in mapper.relationships}
+        proxies = {r.info.get('key'): r for r in mapper.all_orm_descriptors
+                   if isinstance(r, AssociationProxy)}
+        self.proxies = {k: v.for_class(model) for k, v in proxies.items() if k}
+
+        target_attr_types = (InstrumentedAttribute, AssociationProxy)
+        self.attributes = {**{c.key: c for c in self.mapper.all_orm_descriptors
+                              if isinstance(c, target_attr_types) and c.key[0] != '_'},
+                           **self.proxies}
+
+        self.atypes = atypes = {}
+        self.ctypes = ctypes = {}
+        self.dtypes = dtypes = {}
+
+        cls_annotations = getattr(model, '__annotations__')
+        for c, col in self.columns.items():
+            atypes[c] = ColumnProperty
+            ctypes[c] = col.type
+            if cls_annotations:
+                dt = cls_annotations.get(c)
+                if isinstance(dt, type):
+                    dtypes[c] = dt
+                    continue
+            dtypes[c] = object
+
+        for c, r in self.relationships.items():
+            atypes[c] = RelationshipProperty
+            dtypes[c] = self._detect_collection(r.collection_class)
+
+        for c, p in self.proxies.items():
+            atypes[c] = AssociationProxyInstance
+            dtypes[c] = self._detect_collection(p.local_attr.property.collection_class)
+
+    @classmethod
+    def _detect_collection(cls, type_):
+        type_ = type_ or list
+        try:
+            return type(type_())
+        except Exception:
+            return type_
+
+    @classmethod
+    def is_column(cls, attr: InferrableSelectable):
+        if isinstance(attr, InstrumentedAttribute):
+            attr = attr.prop
+        return isinstance(attr, ColumnProperty)
+
+    @classmethod
+    def is_relationship(cls, attr: InferrableSelectable):
+        if isinstance(attr, InstrumentedAttribute):
+            attr = attr.prop
+        return isinstance(attr, RelationshipProperty)
+
+    @classmethod
+    def is_proxy(cls, attr: InferrableSelectable):
+        return isinstance(attr, (AssociationProxy, AssociationProxyInstance))
+
+    @classmethod
+    def owning_class(cls, attr: InferrableSelectable):
+        if cls.is_column(attr) or cls.is_relationship(attr):
+            return attr.parent.entity
+        if cls.is_proxy(attr):
+            return attr.owning_class
+
+    @classmethod
+    def join_target(cls, attr: InferrableSelectable) -> Mapper | None:
+        if cls.is_relationship(attr):
+            return attr.property.entity
+        if cls.is_proxy(attr):
+            remote_prop = attr.remote_attr.property
+            if isinstance(remote_prop, RelationshipProperty):
+                return remote_prop.entity
+
+
+@event.listens_for(metadata, 'after_create')
+def find_models(*args, **kwargs):
+    for k, v in Base.registry._class_registry.items():
+        if isinstance(v, type) and issubclass(v, Identity):
+            v._init_reflection()
