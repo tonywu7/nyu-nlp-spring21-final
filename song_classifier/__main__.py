@@ -49,6 +49,12 @@ def find_commands():
 
 
 @main.command()
+def run():
+    from .classifier import main
+    main()
+
+
+@main.command()
 def version():
     from . import __version__
     from .database import VERSION
