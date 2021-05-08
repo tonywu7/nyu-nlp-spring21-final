@@ -2,6 +2,7 @@ import nltk
 from nltk.tokenize import word_tokenize
 import numpy as np
 import math
+import csv
 
 
 # done for each category in training set
@@ -88,7 +89,7 @@ def getTFIDF_category(tfidfCategory, wordList):
 
 ######## cosine similarity ##########
 
-def getSimilarity(testSongVec, songTitle, categoryVectors):
+def getSimilarity(testSongVec, categoryVectors):
 
     catNames = ["happy","relaxed","sad","angry"]
     songSimilarity = dict.fromkeys(catNames)
@@ -122,6 +123,77 @@ def getSimilarity(testSongVec, songTitle, categoryVectors):
 
     return songSimilarity
 
+# save all tf idf vectors and their labels into csv file to be used in ML models
+def saveVectors(tfidfVectors, labels, category):
+    csvColumns = ['Title','Vector','Label']
+    df = pd.DataFrame()
+    df['Title'] = tfidfVectors.keys()
+    df['Vector'] = tfidfVectors
+
+    # labels are categories in numerical values, so happy = 1, relaxed = 2...
+    df['Label'] = labels
+
+    filePath = "tfidfVectors"+category+".csv"
+    df.to_csv(filePath, index = False, header = True)
+
+
+def main():
+
+    ######## Training ##########
+
+    trainingTF = getAllTF(trainingSongLyrics,trainingSongTitles)
+
+    happyIDF = getIDF(happyWordList,happySongLyrics)
+    relaxedIDF = getIDF(relaxedWordList,relaxedSongLyrics)
+    sadIDF = getIDF(sadWordList,sadSongLyrics)
+    angryIDF = getIDF(angryWordList,angrySongLyrics)
 
     
+    happyTfidf = getTFIDF(happyIDF,trainingTF,happySongLyrics,happySongTitles)
+    happyVector = getTFIDF_category(happyTfidf,happyWordList)
+    saveVectors(happyTfidf, labels, "Happy")
+
+    relaxedTfidf = getTFIDF(relaxedIDF,trainingTF,relaxedSongLyrics,relaxedSongTitles)
+    relaxedVector = getTFIDF_category(relaxedTfidf,relaxedWordList)
+    saveVectors(relaxedTfidf, labels, "Relaxed")
+
+
+    sadTfidf = getTFIDF(sadIDF,trainingTF,sadSongLyrics,sadSongTitles)
+    sadVector = getTFIDF_category(sadTfidf,sadWordList)
+    saveVectors(sadTfidf, labels, "Sad")
+
+    angryTfidf = getTFIDF(angryIDF,trainingTF,angrySongLyrics,angrySongTitles)
+    angryVector = getTFIDF_category(angryTfidf,angryWordList)
+    saveVectors(angryTfidf, labels, "Angry")
+
+    categoryVectors = [happyVector,relaxedVector,sadVector,angryVector]
+
+
+    ######## Testing ##########
+
+    testTF = getAllTF(testSongLyrics,testSongTitles)
+    testIDF = getIDF(testWordList,testSongLyrics)
+    testTfidf = getTFIDF(testIDF,testTF,testSongLyrics,testSongTitles)
+    saveVectors(testTfidf, labels, "Test")
+
+    songSimilarity = dict.fromkeys(testSongTitles)
+    predictedCategories = dict.fromkeys(testSongTitles)
+
+    for i,song in enumerate(testTfidf):
+        title = testSongTitles[i]
+        songSimilarity[title] = getSimilarity(song,categoryVectors)
+
+        # getting category with highest similarity
+        predictedCategories[title] = max(songSimilarity[title])
+    
+
+
+
+
+
+
+
+
+
+
 
