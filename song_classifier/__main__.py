@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
 from importlib import import_module
 from pathlib import Path
 
@@ -26,8 +27,11 @@ from .util.settings import Settings
 @click.group()
 @click.option('-a', '--instance', default='project', required=True, type=click.Path(exists=True, file_okay=False))
 @click.option('-v', '--verbose', is_flag=True, default=False)
+@click.option('-s', '--seed', type=click.INT, required=False)
 @click.pass_context
-def main(ctx, instance, verbose):
+def main(ctx, instance, verbose, seed=None):
+    if seed:
+        random.seed(seed)
     ctx.ensure_object(dict)
     config_logging(level=10 if verbose else 20)
     settings = Settings()
@@ -49,7 +53,7 @@ def find_commands():
 
 
 @main.command()
-def vector_similarity():
+def cosine():
     from .implementations.tfidf import run
     run()
 
