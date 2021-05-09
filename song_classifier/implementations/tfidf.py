@@ -1,4 +1,4 @@
-# Copyright 2021 Nour Abdelmoneim
+# Copyright 2021 Nour Abdelmoneim, Tony Wu
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,20 @@
 # limitations under the License.
 
 import math
+from itertools import chain
 from typing import Dict, List
 
 import pandas as pd
 
+from ..scoring import export, print_score, score, stats
+from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
+from ..training import Lyrics, Titles, Wordbag, label_songs, samples
+from .prep import init_nltk
 
-def get_tf(song_lyrics: List[str]) -> Dict[str, float]:
+Vector = Dict[str, float]
+
+
+def get_tf(song_lyrics: List[str]) -> Vector:
     """Get TF value for one song.
 
     Parameters
@@ -44,7 +52,7 @@ def get_tf(song_lyrics: List[str]) -> Dict[str, float]:
     return {word: term_freq / song_length for word, term_freq in tf_song.items()}
 
 
-def get_all_tf(all_song_lyrics: List[List[str]], all_song_titles: List[str]) -> Dict[str, Dict[str, float]]:
+def get_all_tf(all_song_lyrics: Lyrics, all_song_titles: Titles) -> Dict[str, Vector]:
     """Get term frequencies for all songs.
 
     Parameters
@@ -68,7 +76,7 @@ def get_all_tf(all_song_lyrics: List[List[str]], all_song_titles: List[str]) -> 
     return tf_songs
 
 
-def get_idf(word_list: List[str], all_song_lyrics: List[List[str]]) -> Dict[str, float]:
+def get_idf(word_list: Wordbag, all_song_lyrics: Lyrics) -> Vector:
     """Get idf for a song.
 
     Parameters
@@ -93,14 +101,14 @@ def get_idf(word_list: List[str], all_song_lyrics: List[List[str]]) -> Dict[str,
             if word in song:
                 idf_songs[word] += 1
 
-        idf_songs[word] = math.log(len(all_song_lyrics) / idf_songs[word])
+        idf_songs[word] = idf_songs[word] and math.log(len(all_song_lyrics) / idf_songs[word])
 
     return idf_songs
 
 
-def get_tf_idf(idf_songs: Dict[str, float], tf_songs: Dict[str, Dict[str, float]],
-               all_song_lyrics: List[List[str]], all_song_titles: List[str]):
-    tf_idf_songs: Dict[str, Dict[str, float]] = {}
+def get_tf_idf(idf_songs: Vector, tf_songs: Dict[str, Vector],
+               all_song_lyrics: Lyrics, all_song_titles: Titles) -> Dict[str, Vector]:
+    tf_idf_songs: Dict[str, Vector] = {}
 
     for i, song in enumerate(all_song_lyrics):
         title = all_song_titles[i]
@@ -111,7 +119,7 @@ def get_tf_idf(idf_songs: Dict[str, float], tf_songs: Dict[str, Dict[str, float]
     return tf_idf_songs
 
 
-def get_tf_idf_category(tf_idf_category: Dict[str, Dict[str, float]], word_list: List[str]) -> Dict[str, float]:
+def get_tf_idf_category(tf_idf_category: Dict[str, Vector], word_list: List[str]) -> Vector:
     category_vector = {w: 0 for w in word_list}
     for vec in tf_idf_category.values():
         for word in vec:
@@ -125,7 +133,7 @@ def get_tf_idf_category(tf_idf_category: Dict[str, Dict[str, float]], word_list:
     return category_vector
 
 
-def get_similarity(test_song_vec: Dict[str, float], category_vectors: Dict[str, Dict[str, float]], categories: List[str]):
+def get_similarity(test_song_vec: Vector, category_vectors: Dict[str, Vector], categories: List[str]):
     song_similarity = dict.fromkeys(categories)
 
     for category_name, vec in category_vectors.items():
@@ -168,3 +176,63 @@ def save_vectors(tfidf_vectors, labels, category):
 
     filePath = f'tfidfVectors_{category}.csv'
     df.to_csv(filePath, index=False, header=True)
+
+
+def master_tf_idf(lyrics: Lyrics, titles: Titles, wordbag: Wordbag):
+    tf = get_all_tf(lyrics, titles)
+    idf = get_idf(wordbag, lyrics)
+    tf_idf = get_tf_idf(idf, tf, lyrics, titles)
+    return tf_idf
+
+
+def run():
+    init_nltk()
+
+    # Load songs
+    print('Loading songs')
+
+    training, testing, _, ground_truths = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
+
+    train_lyrics, train_wordbags, train_titles = label_songs(training)
+    test_lyrics, test_wordbags, test_titles = label_songs(testing)
+
+    print('Training')
+
+    training_tf = get_all_tf(
+        [*chain(*train_lyrics.values())],
+        [*chain(*train_titles.values())],
+    )
+    category_idfs: Dict[str, Dict[str, float]] = {}
+    for cat in CATEGORIES:
+        category_idfs[cat] = get_idf(train_wordbags[cat], train_lyrics[cat])
+
+    category_tf_idfs = {}
+    category_vectors = {}
+    for cat in CATEGORIES:
+        category_tf_idfs[cat] = cat_tf_idf = get_tf_idf(
+            category_idfs[cat], training_tf,
+            train_lyrics[cat], train_titles[cat],
+        )
+        category_vectors[cat] = get_tf_idf_category(
+            cat_tf_idf, train_wordbags[cat],
+        )
+
+    print('Testing')
+
+    test_wordbag_all = {*chain(*test_wordbags.values())}
+    test_lyrics = [*chain(*test_lyrics.values())]
+    test_titles = [*chain(*test_titles.values())]
+
+    testing_tf_idf = master_tf_idf(test_lyrics, test_titles, test_wordbag_all)
+
+    song_similarities = {k: None for k in test_titles}
+    predictions = {k: None for k in test_titles}
+
+    for title, vec in testing_tf_idf.items():
+        song_similarities[title] = get_similarity(vec, category_vectors, CATEGORIES)
+        predictions[title] = song_similarities[title][0][0]
+
+    stats(predictions, ground_truths, CATEGORIES)
+    scores = score(predictions, ground_truths, CATEGORIES)
+    print_score(scores)
+    export(predictions, ground_truths)

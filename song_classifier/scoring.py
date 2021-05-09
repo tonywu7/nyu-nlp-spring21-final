@@ -16,7 +16,16 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Tuple
 
+import numpy as np
 import pandas as pd
+
+
+def stats(predictions: Dict[str, str], ground_truths: Dict[str, str], categories: List[str]):
+    predictions = np.array([*predictions.values()])
+    ground_truths = np.array([*ground_truths.values()])
+    print('# results')
+    for k in categories:
+        print(f'{k}: {np.count_nonzero(predictions == k)} predicted {np.count_nonzero(ground_truths == k)} expected')
 
 
 def score(predictions: Dict[str, str], ground_truths: Dict[str, str], categories: List[str]) -> Dict[str, Tuple[float, float, float]]:
@@ -72,3 +81,9 @@ def export(predictions: Dict[str, str], ground_truths: Dict[str, str]):
     df = df_pred.join(df_truth)
     filename = f'predictions.{datetime.now().strftime("%Y%m%d.%H%M%S")}.csv'
     df.to_csv(filename, index=True, header=True)
+
+
+def print_score(stats):
+    print('Scores:')
+    for k, (p, r, f) in stats.items():
+        print(f'{k}: precision={p:.3f} recall={r:.3f} f-score={f:.3f}')

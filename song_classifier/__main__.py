@@ -49,8 +49,14 @@ def find_commands():
 
 
 @main.command()
-def run():
-    from .classifier import run
+def vector_similarity():
+    from .implementations.tfidf import run
+    run()
+
+
+@main.command()
+def knn():
+    from .implementations.knn import run
     run()
 
 
