@@ -16,6 +16,7 @@ from itertools import chain
 from typing import Dict, List, Set, Tuple
 
 import numpy as np
+import pandas as pd
 import sklearn
 from sklearn.neighbors import KNeighborsClassifier
 
@@ -28,7 +29,12 @@ from .tfidf import master_tf_idf
 TFIDFVectors = Dict[str, Dict[str, float]]
 
 
-def sparsematrix(vectors: TFIDFVectors, features: Set[str]) -> Tuple[List[str], np.ndarray]:
+def export_matrix(matrix: np.ndarray, filename: str):
+    df = pd.DataFrame(matrix)
+    df.to_csv(filename, index=False, header=False)
+
+
+def sparsematrix(vectors: TFIDFVectors, features: Set[str], name: str = None) -> Tuple[List[str], np.ndarray]:
     features = {k: i for i, k in enumerate(features)}
     matrix = np.empty((len(vectors), len(features)))
     samples = [None for i in range(len(vectors))]
@@ -36,6 +42,8 @@ def sparsematrix(vectors: TFIDFVectors, features: Set[str]) -> Tuple[List[str], 
         samples[idx] = key
         for term, val in tfidf.items():
             matrix[idx, features[term]] = val
+    if name:
+        export_matrix(matrix, name)
     return samples, matrix
 
 
@@ -46,16 +54,16 @@ def kmeans(tf_idf_vectors: TFIDFVectors, features: Set[str], categories: List[st
     return labels
 
 
-def knn_train(tf_idf_vectors: TFIDFVectors, features: Set[str], targets: List[Tuple[str, str]], categories: List[str]):
+def knn_train(tf_idf_vectors: TFIDFVectors, features: Set[str], targets: List[Tuple[str, str]]):
     model = KNeighborsClassifier(n_neighbors=7)
-    samples, matrix = sparsematrix(tf_idf_vectors, features)
+    samples, matrix = sparsematrix(tf_idf_vectors, features, name='matrix-training.csv')
     labels = np.array(targets)
     model.fit(matrix, labels[:, 1])
-    return model
+    return samples, model
 
 
 def knn_classify(model: KNeighborsClassifier, features: Set[str], test_vectors: TFIDFVectors):
-    samples, matrix = sparsematrix(test_vectors, features)
+    samples, matrix = sparsematrix(test_vectors, features, name='matrix-testing.csv')
     labels = model.predict(matrix)
     return dict(zip(samples, labels))
 
@@ -74,9 +82,16 @@ def run():
     test_tfidf = master_tf_idf(test_lyrics, test_titles, features)
 
     print('Fitting')
-    model = knn_train(train_tfidf, features, [*train_labels.items()], CATEGORIES)
+    titlemap, model = knn_train(train_tfidf, features, [*train_labels.items()])
+
+    train_labels_cat_only = np.array([train_labels[k] for k in titlemap]).transpose()
+    np.savetxt('labels-training.csv', train_labels_cat_only, '%s')
+
     print('Classifying')
     predictions = dict(knn_classify(model, features, test_tfidf))
+
+    test_labels_cat_only = np.array([test_truths[k] for k in predictions]).transpose()
+    np.savetxt('labels-testing.csv', test_labels_cat_only, '%s')
 
     stats(predictions, test_truths, CATEGORIES)
     scores = score(predictions, test_truths, CATEGORIES)
