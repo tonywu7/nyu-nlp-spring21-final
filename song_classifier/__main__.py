@@ -50,8 +50,8 @@ def find_commands():
 
 @main.command()
 def run():
-    from .classifier import main
-    main()
+    from .classifier import run
+    run()
 
 
 @main.command()

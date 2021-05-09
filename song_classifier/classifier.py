@@ -1,4 +1,4 @@
-# Copyright 2021 Tony Wu +https://github.com/tonywu7/
+# Copyright 2021 Nour Abdelmoneim, Thomas Kim, Lucas Ortiz, Tony Wu
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,337 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import annotations
-
-import math
-import re
-import string
+import random
 from collections import defaultdict
-from contextlib import contextmanager
 from itertools import chain
-from typing import (Callable, Dict, Generator, Iterable, Iterator, List, Set,
-                    Tuple)
+from typing import Dict, List, Set
 
 import nltk
-from nltk.stem.snowball import EnglishStemmer
 
-from .database import get_db
-
-STOP_WORDS = {
-    'a', 'the', 'an', 'and', 'or', 'but', 'about', 'above', 'after', 'along', 'amid', 'among',
-    'as', 'at', 'by', 'for', 'from', 'in', 'into', 'like', 'minus', 'near', 'of', 'off', 'on',
-    'onto', 'out', 'over', 'past', 'per', 'plus', 'since', 'till', 'to', 'under', 'until', 'up',
-    'via', 'vs', 'with', 'that', 'can', 'cannot', 'could', 'may', 'might', 'must',
-    'need', 'ought', 'shall', 'should', 'will', 'would', 'have', 'had', 'has', 'having', 'be',
-    'is', 'am', 'are', 'was', 'were', 'being', 'been', 'get', 'gets', 'got', 'gotten',
-    'getting', 'seem', 'seeming', 'seems', 'seemed',
-    'enough', 'both', 'all', 'your' 'those', 'this', 'these',
-    'their', 'the', 'that', 'some', 'our', 'no', 'neither', 'my',
-    'its', 'his' 'her', 'every', 'either', 'each', 'any', 'another',
-    'an', 'a', 'just', 'mere', 'such', 'merely' 'right', 'no', 'not',
-    'only', 'sheer', 'even', 'especially', 'namely', 'as', 'more',
-    'most', 'less' 'least', 'so', 'enough', 'too', 'pretty', 'quite',
-    'rather', 'somewhat', 'sufficiently' 'same', 'different', 'such',
-    'when', 'why', 'where', 'how', 'what', 'who', 'whom', 'which',
-    'whether', 'why', 'whose', 'if', 'anybody', 'anyone', 'anyplace',
-    'anything', 'anytime' 'anywhere', 'everybody', 'everyday',
-    'everyone', 'everyplace', 'everything' 'everywhere', 'whatever',
-    'whenever', 'whereever', 'whichever', 'whoever', 'whomever' 'he',
-    'him', 'his', 'her', 'she', 'it', 'they', 'them', 'its', 'their', 'theirs',
-    'you', 'your', 'yours', 'me', 'my', 'mine', 'I', 'we', 'us', 'much', 'and/or',
-    *string.punctuation,
-}
-
-STEMMER: Callable[[str], str] = None
-ALPHABETS = re.compile(r'[A-Za-z]')
-SPLITTING = re.compile(r'\W+')
+from .database import Playlist, Song, get_db
+from .implementations.tfidf import (get_all_tf, get_idf, get_similarity,
+                                    get_tf_idf, get_tf_idf_category)
+from .implementations.tfidf2 import Document, init_nltk
+from .scoring import export, score
 
 
-def init_nltk():
-    nltk.download('punkt', quiet=True)
-    nltk.download('stopwords', quiet=True)
-    return EnglishStemmer(True).stem
+def run():
+    # Desired size of development set / total samples
+    RATIO = .6
 
+    init_nltk()
 
-def term_frequencies(tokens: List[str], test: Callable[[str], bool] = lambda t: True,
-                     transform: Callable[[str], str] = lambda t: t) -> Dict[str, int]:
-    freq = defaultdict(int)
-    for t in tokens:
-        t = transform(t)
-        if test(t):
-            freq[t] += 1
-    return freq
+    # Load songs
 
-
-def similarity_tf_idf(q: Document, d: Document, idf: Dict[str, int]) -> float:
-    """Calculate tf-idf weighted cosine similarity score.
-
-    Expects the length of the document/query vertex to be precalculated
-    and stored in the `Document.magnitude` attribute.
-    """
-    s1 = [q.term_freq[word] * d.term_freq[word] * idf[word] ** 2
-          for word in q.word_set & d.word_set]
-    try:
-        return sum(s1) / (q.magnitude * d.magnitude)
-    except ZeroDivisionError:
-        return 0.0
-
-
-def similarity_vectors(q: Document, d: Document) -> float:
-    """Calculate a cosine using only term frequencies."""
-    s1 = [q.term_freq[word] * d.term_freq[word] for word in q.word_set]
-    s2 = [q.term_freq[word] ** 2 for word in q.word_set]
-    s3 = [d.term_freq[word] ** 2 for word in q.word_set]
-    try:
-        return sum(s1) / (math.sqrt(sum(s2)) * math.sqrt(sum(s3)))
-    except ZeroDivisionError:
-        return 0.0
-
-
-def overlay(*stats: Dict[str, int]) -> Dict[str, int]:
-    """Accumulate multiple term frequency table into one."""
-    combined = defaultdict(int)
-    for d in stats:
-        for k, v in d.items():
-            combined[k] += v
-    return combined
-
-
-class Document:
-    def __init__(self):
-        self.id: int
-        self.author: str = ''
-        self.ref: str = ''
-
-        self.text: List[str]
-        self.term_freq: Dict[str, int]
-        self.magnitude: float
-
-    def parse(self):
-        buf = []
-        text = []
-        while True:
-            try:
-                line = yield
-            except GeneratorExit:
-                text.extend(buf)
-                self.text = nltk.word_tokenize(' '.join(text))
-                break
-            line = line.strip()
-            if line[:2] == '.I':
-                self.id = int(line[3:])
-            elif line[:2] == '.T':
-                continue
-            elif line[:2] == '.A':
-                text.extend(buf)
-                buf.clear()
-            elif line[:2] == '.B':
-                self.author = ' '.join(buf)
-                buf.clear()
-            elif line[:2] == '.W':
-                self.ref = ' '.join(buf)
-                buf.clear()
-            else:
-                buf.append(line)
-
-    def postprocess_tokens(self):
-        tokens = self.text
-        tokens = self.split_punctuation(tokens)
-        tokens = self.strip_punctuation(tokens)
-        tokens = self.remove_non_alphabetic(tokens)
-        tokens = self.stemmed(tokens)
-        tokens = self.keep_min_length(tokens, 3)
-        self.text = tokens
-
-    def strip_punctuation(self, tokens: List[str]) -> List[str]:
-        return [t.strip(string.punctuation) for t in tokens]
-
-    def remove_non_alphabetic(self, tokens: List[str]) -> List[str]:
-        return [t for t in tokens if ALPHABETS.search(t)]
-
-    def keep_min_length(self, tokens: List[str], length) -> List[str]:
-        return [t for t in tokens if len(t) >= length]
-
-    def stemmed(self, tokens: List[str]) -> List[str]:
-        stemmed = []
-        for word in tokens:
-            stem = STEMMER(word)
-            if stem != word:
-                stemmed.append(stem)
-        return [*tokens, *stemmed]
-
-    def split_punctuation(self, tokens: List[str]) -> List[str]:
-        occurrences = []
-        for word in self.text:
-            parts = SPLITTING.split(word)
-            if len(parts) > 1:
-                occurrences.extend(parts)
-        return [*tokens, *occurrences]
-
-    @property
-    def word_set(self) -> Set[str]:
-        return self.term_freq.keys()
-
-    def calc_freq(self):
-        """Calculate term frequency for this document."""
-        self.term_freq = term_frequencies(self.text, lambda t: t not in STOP_WORDS)
-
-    def calc_mag(self, idf: Dict[str, int]) -> float:
-        """Calculate the length of the document's vector (part of the denominator of the tf-idf cosine)."""
-        self.magnitude = math.sqrt(sum((self.term_freq[word] * idf[word]) ** 2 for word in self.word_set))
-
-
-class DocumentCollection:
-    def __init__(self):
-        self.docs: Dict[int, Document] = {}
-        self.terms: Dict[str, int]
-        self.idf: Dict[str, int]
-        self.filter: Set[int] = self.docs.keys()
-
-    def __getitem__(self, idx: int):
-        return self.docs[idx]
-
-    def add(self, doc: Document):
-        self.docs[doc.id] = doc
-
-    def calc_idf(self):
-        self.terms = defaultdict(int)
-        for doc in self.docs.values():
-            for word in doc.word_set:
-                self.terms[word] += 1
-        N = len(self.docs)
-        self.idf = defaultdict(int, {k: math.log(N / v) for k, v in self.terms.items() if v})
-
-    def calc_mag(self, idf: Dict[str, int], **kwargs):
-        for d in self.docs.values():
-            d.calc_mag(idf, **kwargs)
-
-    def __iter__(self) -> Iterator[Document]:
-        for idx, doc in self.docs.items():
-            if idx in self.filter:
-                yield doc
-
-    @contextmanager
-    def selection(self, *ids: int):
-        """
-        Show only selected documents. Within this context, using this object
-        as an iterator will only yield selected documents.
-        """
-        self.filter = set(ids)
-        try:
-            yield
-        finally:
-            self.filter = self.docs.keys()
-
-
-def parse_documents(source: Iterable[str]) -> DocumentCollection:
-    docs = DocumentCollection()
-    doc: Document = None
-    parser: Generator = None
-    for line in source:
-        if line[:2] == '.I':
-            if parser:
-                parser.close()
-            if doc:
-                docs.add(doc)
-            doc = Document()
-            parser = doc.parse()
-            parser.send(None)
-        parser.send(line)
-    parser.close()
-    docs.add(doc)
-    return docs
-
-
-def evaluate(queries: DocumentCollection, documents: DocumentCollection, limit=1):
-    """Calculate similarity scores for all queries and documents."""
-    for q in queries:
-        idx = q.id
-        scores = []
-        for d in documents:
-            s = similarity_tf_idf(q, d, documents.idf)
-            scores.append((d.id, s))
-        for d, s in [*sorted(scores, key=lambda t: t[1], reverse=True)][:limit]:
-            yield idx, d, s
-
-
-class Clusters:
-    """Co-occurrence finding using pointwise mutual information."""
-
-    NEIGHBORHOOD_SIZE = 10
-    IDF_TARGET = math.log(1400 / 3)
-    PMI_TARGET = 10
-
-    def __init__(self, idf: Dict[str, int]):
-        self.ind_occur: Dict[str, int] = defaultdict(int)
-        self.co_occur: Dict[Tuple[str, str], int] = defaultdict(int)
-        self.total: int = 0
-        self.targets: Set[str] = {w for w, v in idf.items() if v >= self.IDF_TARGET}
-        self.pmi: Dict[Tuple[str, str], float] = {}
-        self.map: Dict[str, Set[str]] = defaultdict(set)
-
-    def add(self, doc: Document):
-        self.ind_occur = overlay(self.ind_occur, doc.term_freq)
-        self.total += len(doc.text)
-        size = self.NEIGHBORHOOD_SIZE
-        cooccurrences: Set[Tuple[int, int]] = set()
-        for i, word in enumerate(doc.text):
-            word = STEMMER(word)
-            if word in self.targets:
-                neighborhood = doc.text[i - size:i + size]
-                k = i - size
-                if k < 0:
-                    k = 0
-                for j, neighbor in enumerate(neighborhood, k):
-                    neighbor = STEMMER(neighbor)
-                    if neighbor in self.targets and word != neighbor:
-                        cooccurrences.add(tuple(sorted([i, j])))
-        for i, j in cooccurrences:
-            self.co_occur[tuple(sorted([doc.text[i], doc.text[j]]))] += 1
-
-    def calc_pmi(self):
-        N = self.total
-        for words, f_joint in self.co_occur.items():
-            w1, w2 = words
-            f_1 = self.ind_occur[w1]
-            f_2 = self.ind_occur[w2]
-            if not f_1 or not f_2:
-                continue
-            self.pmi[w1, w2] = math.log(f_joint / N / (f_1 / N) / (f_2 / N))
-
-    def map_clusters(self):
-        for pair, pmi in sorted(self.pmi.items(), key=lambda t: t[1], reverse=True):
-            if pmi < self.PMI_TARGET:
-                break
-            w1, w2 = pair
-            self.map[w1].add(w2)
-            self.map[w2].add(w1)
-
-    def modify_query(self, doc: Document):
-        to_add = set()
-        for word in doc.text:
-            cluster = self.map[word]
-            to_add |= cluster
-        doc.text.extend(to_add)
-
-
-def process_cluster(queries: DocumentCollection, documents: DocumentCollection):
-    clusters = Clusters(documents.idf)
-    for doc in documents:
-        clusters.add(doc)
-    clusters.calc_pmi()
-    clusters.map_clusters()
-    for doc in queries:
-        clusters.modify_query(doc)
-        doc.calc_freq()
-
-
-def main():
-    global STEMMER
-    STEMMER = init_nltk()
+    print('Loading songs')
 
     db = get_db()
-    CATEGORIES = ('happy', 'sad', 'relaxed', 'angry')
+    CATEGORIES = ('relaxed', 'sad', 'angry', 'happy')
     KEYWORDS = {
         'happy': ['happy', 'joy', 'awesome', 'party', 'city', 'love', 'sex', 'summer', 'spring', 'pop', 'yay', 'fun', 'club', 'nightlife', 'dance', 'romance', 'motivational', 'electro', 'beach', 'radio', 'beautiful', 'pretty', 'christmas', 'disco', 'birthday', 'edm', 'energetic', 'festival', 'inspirational', 'jog', 'uplifting', 'training', 'happiness'],
         'sad': ['sad', 'blues', 'breakup', 'ache', 'wish', 'die', 'alone', 'drowning', 'reminisce', 'funeral', 'dead', 'dark', 'broken', 'remember', 'forget', 'forgot', 'break', 'hope', 'lone', 'depressed', 'depression'],
@@ -350,105 +45,100 @@ def main():
         'angry': ['fuck', 'bitch', 'angry', 'mad', 'pissed', 'shit', 'rock', 'metal', 'death', 'gym', 'workout', 'hell', 'demon', 'punk', 'devil'],
     }
     playlists = {k: [*chain.from_iterable(db.playlist_title_search(t) for t in v)] for k, v in KEYWORDS.items()}
-    songs_reversed = defaultdict(lambda: defaultdict(list))
+    songs_reversed: Dict[Song, Dict[str, List[Playlist]]] = defaultdict(lambda: defaultdict(list))
     for k, v in playlists.items():
         for p in v:
             for s in p.songs:
                 songs_reversed[s][k].append(p)
-    songs = {k: [] for k in CATEGORIES}
+
+    dev_set: Dict[str, List[Song]] = {k: [] for k in CATEGORIES}
+    test_set: Dict[str, List[Song]] = {k: [] for k in CATEGORIES}
+
     for s, c in songs_reversed.items():
         if len(c) > 1:
             continue
         for k, ps in c.items():
             if len(ps) >= 1:
-                songs[k].append(s)
-    # training = {k: v[:math.floor(len(v) * 0.8)] for k, v in songs.items()}
-    # development = {k: v[math.floor(len(v) * 0.8):] for k, v in songs.items()}
-    training = {k: v[:4000] for k, v in songs.items()}
-    development = {k: v[4000:5000] for k, v in songs.items()}
+                # A song have an 80% chance to go into the development set
+                # To reproduce the same sets, seed RNG
+                if random.random() < RATIO:
+                    dev_set[k].append(s)
+                else:
+                    test_set[k].append(s)
 
-    print(f'Training size {sum(len(v) for v in training.values())}')
-    print(f'Testing size {sum(len(v) for v in development.values())}')
-    print(f'# songs { {k: len(training[k]) + len(development[k]) for k in songs} }')
+    ground_truths: Dict[str, str] = {}
+    for cat, songs in test_set.items():
+        for song in songs:
+            ground_truths[song.title] = cat
 
-    sources = {k: Document() for k in CATEGORIES}
-    targets = DocumentCollection()
-    answers = {}
-    for k, v in development.items():
-        for s in v:
-            answers[s.id] = k
+    def dissect_data(songs: Dict[str, List[Song]]):
+        lyrics: Dict[str, List[List[str]]] = {k: [] for k in CATEGORIES}
+        wordbags: Dict[str, Set[str]] = {k: set() for k in CATEGORIES}
+        titles: Dict[str, List[str]] = {k: [] for k in CATEGORIES}
+        for cat, songs_in_cat in songs.items():
+            wordbag = wordbags[cat]
+            for song in songs_in_cat:
+                doc = Document()
+                doc.text = nltk.tokenize.word_tokenize(song.lyrics)
+                doc.postprocess_tokens()
+                lyrics[cat].append(doc.text)
+                titles[cat].append(song.title)
+                wordbag.update(doc.text)
+        return lyrics, wordbags, titles
 
-    i = 0
-    for k, d in sources.items():
-        d.id = i
-        d.text = []
-        for s in training[k]:
-            d.text.extend(nltk.tokenize.word_tokenize(s.lyrics))
-        i += 1
+    print('Training')
 
-    corpus = DocumentCollection()
-    for d in sources.values():
-        corpus.add(d)
+    # Training
+    dev_lyrics, dev_wordbags, dev_titles = dissect_data(dev_set)
 
-    for k, ss in development.items():
-        for s in ss:
-            d = Document()
-            d.id = s.id
-            d.text = nltk.tokenize.word_tokenize(s.lyrics)
-            targets.add(d)
+    training_tf = get_all_tf(
+        [*chain(*dev_lyrics.values())],
+        [*chain(*dev_titles.values())],
+    )
+    category_idfs: Dict[str, Dict[str, float]] = {}
+    for cat in CATEGORIES:
+        category_idfs[cat] = get_idf(dev_wordbags[cat], dev_lyrics[cat])
 
-    for doc in chain(corpus, targets):
-        doc.postprocess_tokens()
-        doc.calc_freq()
-    corpus.calc_idf()
-    corpus.calc_mag(corpus.idf)
-    process_cluster(targets, corpus)
-    targets.calc_mag(corpus.idf)
+    category_tf_idfs = {}
+    category_vectors = {}
+    for cat in CATEGORIES:
+        category_tf_idfs[cat] = cat_tf_idf = get_tf_idf(
+            category_idfs[cat], training_tf,
+            dev_lyrics[cat], dev_titles[cat],
+        )
+        category_vectors[cat] = get_tf_idf_category(
+            cat_tf_idf, dev_wordbags[cat],
+        )
 
-    tp = defaultdict(int)
-    fp = defaultdict(int)
-    fn = defaultdict(int)
+    print('Testing')
 
-    for idx, doc_id, score in evaluate(targets, corpus):
-        prediction = CATEGORIES[doc_id]
-        truth = answers[idx]
-        print(idx, prediction, truth, score)
-        if truth == prediction:
-            tp[truth] += 1
-        else:
-            fp[prediction] += 1
-            fn[truth] += 1
+    # Testing
 
-    precisions = defaultdict(int)
-    recall = defaultdict(int)
-    fscore = defaultdict(int)
+    test_lyrics, test_wordbags, test_titles = dissect_data(test_set)
+    test_wordbags = [*chain(*test_wordbags.values())]
+    test_lyrics = [*chain(*test_lyrics.values())]
+    test_titles = [*chain(*test_titles.values())]
 
-    print('\nPRECISION')
-    for c in CATEGORIES:
-        try:
-            p = precisions[c] = tp[c] / (tp[c] + fp[c])
-        except ZeroDivisionError:
-            print(f'  {c} -1')
-        else:
-            print(f'  {c} {p:.3f}')
-    print(f'global {sum(tp.values()) / (sum(tp.values()) + sum(fp.values())):.3f}')
+    testing_tf = get_all_tf(test_lyrics, test_titles)
+    testing_idf = get_idf(test_wordbags, test_lyrics)
 
-    print('\nRECALL')
-    for c in CATEGORIES:
-        try:
-            r = recall[c] = tp[c] / (tp[c] + fn[c])
-        except ZeroDivisionError:
-            print(f'  {c} -1')
-        else:
-            print(f'  {c} {r:.3f}')
-    print(f'global {sum(tp.values()) / (sum(tp.values()) + sum(fn.values())):.3f}')
+    testing_tf_idf = get_tf_idf(testing_idf, testing_tf, test_lyrics, test_titles)
 
-    print('\nF-score')
-    for c in CATEGORIES:
-        try:
-            f = fscore[c] = tp[c] / (tp[c] + .5 * (fp[c] + fn[c]))
-        except ZeroDivisionError:
-            print(f'  {c} -1')
-        else:
-            print(f'  {c} {f:.3f}')
-    print(f'global {sum(tp.values()) / (sum(tp.values()) + .5 * (sum(fp.values()) + sum(fn.values()))):.3f}')
+    song_similarities = {k: None for k in test_titles}
+    predictions = {k: None for k in test_titles}
+
+    for title, vec in testing_tf_idf.items():
+        song_similarities[title] = get_similarity(vec, category_vectors, CATEGORIES)
+        predictions[title] = song_similarities[title][0][0]
+
+    stats = score(predictions, ground_truths, CATEGORIES)
+
+    print('Dataset stats:')
+    for k in CATEGORIES:
+        print(f'{k}: development={len(dev_set[k])} testing={len(test_set[k])}')
+
+    print('Scores:')
+    for k, (p, r, f) in stats.items():
+        print(f'{k}: precision={p:.3f} recall={r:.3f} f-score={f:.3f}')
+
+    export(predictions, ground_truths)
