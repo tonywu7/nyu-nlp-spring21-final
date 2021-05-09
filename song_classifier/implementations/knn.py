@@ -47,7 +47,7 @@ def kmeans(tf_idf_vectors: TFIDFVectors, features: Set[str], categories: List[st
 
 
 def knn_train(tf_idf_vectors: TFIDFVectors, features: Set[str], targets: List[Tuple[str, str]], categories: List[str]):
-    model = KNeighborsClassifier(n_neighbors=len(categories))
+    model = KNeighborsClassifier(n_neighbors=7)
     samples, matrix = sparsematrix(tf_idf_vectors, features)
     labels = np.array(targets)
     model.fit(matrix, labels[:, 1])
