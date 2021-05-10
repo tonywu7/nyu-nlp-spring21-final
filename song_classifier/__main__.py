@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import random
 from importlib import import_module
 from pathlib import Path
 
 import click
+import simplejson as json
 
 from .app import Application
 from .util.importutil import iter_module_tree
@@ -62,6 +64,29 @@ def cosine():
 def knn():
     from .implementations.knn import run
     run()
+
+
+@main.command()
+@click.option('-i', '--input-file', required=True)
+def mbz_artists(input_file):
+    from .web import collect_artists
+    with open(input_file, 'r') as f:
+        artists = json.load(f)
+    asyncio.run(collect_artists(artists))
+
+
+@main.command()
+@click.option('-i', '--input-dir', required=True)
+def nuclear(input_dir):
+    from .web import collect_songs
+    artists = []
+    for p in Path(input_dir).iterdir():
+        if p.suffix != '.json':
+            continue
+        with open(p) as f:
+            data = json.load(f)
+        artists.append((data['id'], data['name']))
+    asyncio.run(collect_songs(artists))
 
 
 @main.command()
