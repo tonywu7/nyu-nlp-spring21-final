@@ -18,7 +18,7 @@ from typing import Dict, List
 
 import pandas as pd
 
-from ..app import get_app
+from ..collector import samples
 from ..scoring import export, print_score, score, stats
 from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
 from ..training import Lyrics, Titles, Wordbag, label_songs, sort_songs
@@ -192,17 +192,9 @@ def run():
     # Load songs
     print('Loading songs')
 
-    app = get_app()
-    if app._version == 1:
-        from ..collector import samples
-        training, testing = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
-        categories = CATEGORIES
-        _, ground_truths = sort_songs(training, testing)
-    else:
-        from ..collector_v2 import samples
-        training, testing = samples(TESTING_RATIO)
-        categories = training.keys()
-        _, ground_truths = sort_songs(training, testing)
+    training, testing = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
+    categories = CATEGORIES
+    _, ground_truths = sort_songs(training, testing)
 
     train_lyrics, train_wordbags, train_titles = label_songs(training)
     test_lyrics, test_wordbags, test_titles = label_songs(testing)

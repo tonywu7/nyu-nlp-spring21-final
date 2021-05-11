@@ -20,7 +20,7 @@ import pandas as pd
 import sklearn
 from sklearn.neighbors import KNeighborsClassifier
 
-from ..app import get_app
+from ..collector import samples
 from ..scoring import export, print_score, score, stats
 from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
 from ..training import convert_songs, sort_songs
@@ -74,17 +74,9 @@ def run():
 
     print('Loading songs')
 
-    app = get_app()
-    if app._version == 1:
-        from ..collector import samples
-        training, testing = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
-        categories = CATEGORIES
-        train_labels, test_truths = sort_songs(training, testing)
-    else:
-        from ..collector_v2 import samples
-        training, testing = samples(TESTING_RATIO)
-        categories = training.keys()
-        train_labels, test_truths = sort_songs(training, testing)
+    training, testing = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
+    categories = CATEGORIES
+    train_labels, test_truths = sort_songs(training, testing)
 
     train_lyrics, train_wordbag, train_titles = convert_songs([*chain(*training.values())])
     test_lyrics, test_wordbag, test_titles = convert_songs([*chain(*testing.values())])
@@ -97,14 +89,14 @@ def run():
     print('Fitting')
     titlemap, model = knn_train(train_tfidf, features, [*train_labels.items()])
 
-    train_labels_cat_only = np.array([train_labels[k] for k in titlemap]).transpose()
-    np.savetxt('labels-training.csv', train_labels_cat_only, '%s')
+    train_labels_exp = np.array([[k, train_labels[k]] for k in titlemap]).transpose()
+    np.savetxt('labels-training.csv', train_labels_exp, '%s')
 
     print('Classifying')
     predictions = dict(knn_classify(model, features, test_tfidf))
 
-    test_labels_cat_only = np.array([test_truths[k] for k in predictions]).transpose()
-    np.savetxt('labels-testing.csv', test_labels_cat_only, '%s')
+    test_labels_exp = np.array([[k, test_truths[k]] for k in predictions]).transpose()
+    np.savetxt('labels-testing.csv', test_labels_exp, '%s')
 
     stats(predictions, test_truths, categories)
     scores = score(predictions, test_truths, categories)

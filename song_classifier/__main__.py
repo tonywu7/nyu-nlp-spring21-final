@@ -28,18 +28,17 @@ from .util.settings import Settings
 
 @click.group()
 @click.option('-a', '--instance', required=True, type=click.Path(exists=True, file_okay=False))
-@click.option('-x', '--db-version')
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.option('-s', '--seed', type=click.INT, required=False)
 @click.pass_context
-def main(ctx, instance, db_version, verbose, seed=None):
+def main(ctx, instance, verbose, seed=None):
     if seed:
         random.seed(seed)
     ctx.ensure_object(dict)
     config_logging(level=10 if verbose else 20)
     settings = Settings()
     settings['DB_ECHO'] = verbose
-    Application(instance, int(db_version))
+    Application(instance)
 
 
 def find_commands():
@@ -92,12 +91,6 @@ def nuclear(input_dir):
             data = json.load(f)
         artists.append((data['id'], data['name']))
     asyncio.run(collect_songs(artists))
-
-
-@main.command()
-def import2():
-    from .prep_v2 import scanner
-    scanner(Path('instance/scrape'))
 
 
 @main.command()

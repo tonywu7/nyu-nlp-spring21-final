@@ -26,14 +26,9 @@ def convert_songs(songs: List) -> Tuple[Lyrics, Wordbag, Titles]:
     lyrics = []
     titles = []
     wordbag = set()
-    processed = {}
     for song in songs:
-        if song.title in processed:
-            text = processed[song.title]
-        else:
-            doc = Document(song.lyrics)
-            text = doc.text
-            processed[song.title] = doc.text
+        doc = Document(song.lyrics)
+        text = doc.text
         lyrics.append(text)
         titles.append(song.title)
         wordbag.update(text)
