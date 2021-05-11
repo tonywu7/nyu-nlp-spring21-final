@@ -49,7 +49,7 @@ STOP_WORDS = {
     'him', 'his', 'her', 'she', 'it', 'they', 'them', 'its', 'their', 'theirs',
     'you', 'your', 'yours', 'me', 'my', 'mine', 'I', 'we', 'us', 'much', 'and/or',
     *string.punctuation,
-    'verse', 'chorus', 'intro', 'repeat',
+    'verse', 'chorus', 'intro', 'repeat', 'instrumental', 'vocal', 'pre',
 }
 
 ALPHABETS = re.compile(r'[A-Za-z]')
@@ -65,6 +65,8 @@ class Document:
 
     def postprocess_tokens(self):
         tokens = self.text
+        tokens = [t.lower() for t in tokens]
+        tokens = [t for t in tokens if t not in STOP_WORDS]
         tokens = self.split_punctuation(tokens)
         tokens = self.strip_punctuation(tokens)
         tokens = self.remove_non_alphabetic(tokens)
