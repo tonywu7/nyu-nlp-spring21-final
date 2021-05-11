@@ -14,7 +14,7 @@
 
 from typing import Dict, List, Set, Tuple
 
-from .implementations.prep import Document
+from .implementations.tfidf2 import Document
 
 Songs = List
 Lyrics = List[List[str]]

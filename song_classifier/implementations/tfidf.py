@@ -19,7 +19,7 @@ from typing import Dict, List, Tuple
 from ..collector import samples
 from ..scoring import print_score, score, stats
 from ..training import Lyrics, Titles, Wordbag, label_songs, sort_songs
-from .prep import init_nltk
+from .tfidf2 import init_nltk
 
 Vector = Dict[str, float]
 
@@ -174,7 +174,7 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
     init_nltk()
 
     # Load songs
-    print('Loading songs')
+    print('Loading songs', flush=True)
 
     training, testing = samples(ratio, categories, keywords, min_weight)
     categories = categories
@@ -187,7 +187,7 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
     test_wordbag_all = {*chain(*test_wordbags.values())}
     wordbags_all = train_wordbag_all | test_wordbag_all
 
-    print('Training')
+    print('Training', flush=True)
 
     training_tf = get_all_tf(
         [*chain(*train_lyrics.values())],
@@ -209,12 +209,12 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
         )
 
     from ..reflection import vector_distances
-    print(vector_distances(category_vectors))
+    print(vector_distances(category_vectors), flush=True)
 
     # from .knn import sparsematrix
     # sparsematrix(category_vectors, wordbags_all, 'categories.csv')
 
-    print('Testing')
+    print('Testing', flush=True)
 
     test_lyrics = [*chain(*test_lyrics.values())]
     test_titles = [*chain(*test_titles.values())]
@@ -228,7 +228,7 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
         song_similarities[title] = get_similarity(vec, category_vectors)
         pred, sim = song_similarities[title][0]
         predictions[title] = pred
-        # print(title, pred, sim)
+        # print(title, pred, sim, flush=True)
 
     stats(predictions, ground_truths, categories)
     scores = score(predictions, ground_truths, categories)

@@ -15,9 +15,9 @@
 import random
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from .implementations.knn import run as run_knn
-from .implementations.prep import Document
-from .implementations.tfidf import run as run_cosine
+from .implementations.knn2 import run as run_knn
+from .implementations.tfidf2 import Document
+from .implementations.tfidf2 import run as run_cosine
 
 CATEGORIES_4 = ('happy', 'sad', 'relaxed', 'angry')
 KEYWORDS_4 = {
@@ -34,7 +34,7 @@ KEYWORDS_2 = {
 }
 
 
-def run_test(seed, name, function, parameters):
+def run_test(name, function, parameters, seed=None):
     import sys
     out = open(f'{name}.txt', 'w+')
     sys.stdout = out
@@ -44,8 +44,8 @@ def run_test(seed, name, function, parameters):
     function(*parameters)
 
 
-def test(seed: int):
-    algorithms = {'cosine': run_cosine, 'knn': run_knn}
+def params_1():
+    algorithms = {'cosine': run_cosine}
     categories = {'cat4': CATEGORIES_4, 'cat2': CATEGORIES_2}
     keywords = {'playlists4': KEYWORDS_4, 'playlist2': KEYWORDS_2}
     postprocessors = {
@@ -58,12 +58,6 @@ def test(seed: int):
             Document.lemmatized,
             Document.filter_by_pos,
         ],
-        'characters': [
-            Document.split_punctuation,
-            Document.strip_punctuation,
-            Document.remove_non_alphabetic,
-            Document.to_lower,
-        ],
         'lexical': [
             Document.split_punctuation,
             Document.strip_punctuation,
@@ -74,7 +68,32 @@ def test(seed: int):
         ],
     }
     min_weight = {str(i): i for i in (2, 1)}
+    knn_n_neighbors = {str(i): i for i in (0,)}
+    return algorithms, categories, keywords, postprocessors, min_weight, knn_n_neighbors
+
+
+def params_2():
+    algorithms = {'knn': run_knn}
+    categories = {'cat4': CATEGORIES_4, 'cat2': CATEGORIES_2}
+    keywords = {'playlists4': KEYWORDS_4, 'playlist2': KEYWORDS_2}
+    postprocessors = {
+        'lexical,syntactic': [
+            Document.remove_non_alphabetic,
+            Document.split_punctuation,
+            Document.strip_punctuation,
+            Document.to_lower,
+            Document.filter_stop_words,
+            Document.lemmatized,
+            Document.filter_by_pos,
+        ],
+    }
+    min_weight = {str(i): i for i in (2,)}
     knn_n_neighbors = {str(i): i for i in (10, 7)}
+    return algorithms, categories, keywords, postprocessors, min_weight, knn_n_neighbors
+
+
+def test(seed: int):
+    algorithms, categories, keywords, postprocessors, min_weight, knn_n_neighbors = params_1()
 
     jobs = []
 
@@ -86,18 +105,18 @@ def test(seed: int):
                         name = f'algo={aname};cat={cname};post={pname};threshold={mname}'
                         function = a
                         parameters = (.8, c, k, p, m)
-                        jobs.append((run_test, seed, name, function, parameters))
+                        jobs.append((run_test, name, function, parameters, seed))
                     else:
                         for nname, n in knn_n_neighbors.items():
                             name = f'algo={aname};cat={cname};post={pname};threshold={mname};neighbor={nname}'
                             function = a
                             parameters = (.8, c, k, p, m, n)
-                            jobs.append((run_test, seed, name, function, parameters))
+                            jobs.append((run_test, name, function, parameters, seed))
 
     with ProcessPoolExecutor(8) as executor:
         futures = {}
-        for f, seed, name, *args in jobs:
-            futures[executor.submit(f, seed, name, *args)] = name
+        for f, name, *args in jobs:
+            futures[executor.submit(f, name, *args)] = name
 
         for fut in as_completed(futures):
             fut.result()

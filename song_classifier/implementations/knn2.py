@@ -22,9 +22,8 @@ from sklearn.neighbors import KNeighborsClassifier
 
 from ..collector import samples
 from ..scoring import print_score, score, stats
-from ..training import convert_songs, sort_songs
-from .tfidf import master_tf_idf
-from .tfidf2 import init_nltk
+from .tfidf2 import (Document, DocumentCollection, init_nltk, process_cluster,
+                     tf_idf)
 
 TFIDFVectors = Dict[str, Dict[str, float]]
 
@@ -42,7 +41,7 @@ def sparsematrix(vectors: TFIDFVectors, features: Set[str], name: str = None) ->
         samples[idx] = key
         for term, val in tfidf.items():
             matrix[idx, features[term]] = val
-    if name:
+    if name and False:
         export_matrix(matrix, name)
     return samples, matrix
 
@@ -56,16 +55,14 @@ def kmeans(tf_idf_vectors: TFIDFVectors, features: Set[str], categories: List[st
 
 def knn_train(tf_idf_vectors: TFIDFVectors, features: Set[str], targets: List[Tuple[str, str]], neighbors):
     model = KNeighborsClassifier(n_neighbors=neighbors)
-    # samples, matrix = sparsematrix(tf_idf_vectors, features, 'matrix-training.csv')
-    samples, matrix = sparsematrix(tf_idf_vectors, features)
+    samples, matrix = sparsematrix(tf_idf_vectors, features, 'matrix-training.csv')
     labels = np.array(targets)
     model.fit(matrix, labels[:, 1])
     return samples, model
 
 
 def knn_classify(model: KNeighborsClassifier, features: Set[str], test_vectors: TFIDFVectors):
-    # samples, matrix = sparsematrix(test_vectors, features, 'matrix-testing.csv')
-    samples, matrix = sparsematrix(test_vectors, features)
+    samples, matrix = sparsematrix(test_vectors, features, 'matrix-testing.csv')
     labels = model.predict(matrix)
     return dict(zip(samples, labels))
 
@@ -76,24 +73,50 @@ def run(ratio, categories, keywords, postprocessors, min_weight, knn_n_neighbors
     print('Loading songs', flush=True)
 
     training, testing = samples(ratio, categories, keywords, min_weight)
-    train_labels, test_truths = sort_songs(training, testing)
 
-    train_lyrics, train_wordbag, train_titles = convert_songs([*chain(*training.values())], postprocessors)
-    test_lyrics, test_wordbag, test_titles = convert_songs([*chain(*testing.values())], postprocessors)
-    features = train_wordbag | test_wordbag
+    print('Dataset stats:', flush=True)
+    for k in training.keys():
+        print(f'{k}: training={len(training[k])} testing={len(testing[k])}', flush=True)
+
+    metadocs = {k: [Document(s.lyrics, title=s.title, label=k) for s in ss] for k, ss in training.items()}
+    testdocs = {k: [Document(s.lyrics, title=s.title, label=k) for s in ss] for k, ss in testing.items()}
+
+    for doc in chain(*metadocs.values(), *testdocs.values()):
+        doc.postprocess_tokens(*postprocessors)
+        doc.calc_freq()
+
+    vectors = DocumentCollection()
+    for doc in chain(*metadocs.values()):
+        vectors.add(doc)
+
+    queries = DocumentCollection()
+    for doc in chain(*testdocs.values()):
+        queries.add(doc)
+
+    vectors.calc_idf()
+    vectors.calc_mag(vectors.idf)
+    process_cluster(queries, vectors)
+    queries.calc_mag(vectors.idf)
+    queries.calc_idf()
 
     print('Calculating tf-idf', flush=True)
-    train_tfidf = master_tf_idf(train_lyrics, train_titles, features)
-    test_tfidf = master_tf_idf(test_lyrics, test_titles, features)
+
+    global_word_set = vectors.word_set & queries.word_set
+
+    train_tfidf = {d.id: tf_idf(d, vectors.idf, global_word_set) for d in vectors}
+    test_tfidf = {d.id: tf_idf(d, queries.idf, global_word_set) for d in queries}
+
+    test_truths = {d.id: d.label for d in queries}
+    # train_labels = {d.id: d.label for d in queries}
 
     print('Fitting', flush=True)
-    titlemap, model = knn_train(train_tfidf, features, [*train_labels.items()], knn_n_neighbors)
-    # (pd.DataFrame([[k, train_labels[k], ' '.join(train_lyrics[i])] for i, k in enumerate(titlemap)])
+    titlemap, model = knn_train(train_tfidf, global_word_set, [(d.id, d.label) for d in vectors], knn_n_neighbors)
+    # (pd.DataFrame([[k, train_labels[k]] for i, k in enumerate(titlemap)])
     #  .to_csv('labels-training.csv', index=False, header=False))
 
     print('Classifying', flush=True)
-    predictions = dict(knn_classify(model, features, test_tfidf))
-    # (pd.DataFrame([[k, test_truths[k], ' '.join(test_lyrics[i])] for i, k in enumerate(predictions)])
+    predictions = dict(knn_classify(model, global_word_set, test_tfidf))
+    # (pd.DataFrame([[k, test_truths[k]] for i, k in enumerate(predictions)])
     #  .to_csv('labels-testing.csv', index=False, header=False))
 
     stats(predictions, test_truths, categories)
