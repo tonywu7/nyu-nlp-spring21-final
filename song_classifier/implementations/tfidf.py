@@ -18,9 +18,10 @@ from typing import Dict, List
 
 import pandas as pd
 
+from ..app import get_app
 from ..scoring import export, print_score, score, stats
 from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
-from ..training import Lyrics, Titles, Wordbag, label_songs, samples
+from ..training import Lyrics, Titles, Wordbag, label_songs, sort_songs
 from .prep import init_nltk
 
 Vector = Dict[str, float]
@@ -191,7 +192,17 @@ def run():
     # Load songs
     print('Loading songs')
 
-    training, testing, _, ground_truths = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
+    app = get_app()
+    if app._version == 1:
+        from ..collector import samples
+        training, testing = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
+        categories = CATEGORIES
+        _, ground_truths = sort_songs(training, testing)
+    else:
+        from ..collector_v2 import samples
+        training, testing = samples(TESTING_RATIO)
+        categories = training.keys()
+        _, ground_truths = sort_songs(training, testing)
 
     train_lyrics, train_wordbags, train_titles = label_songs(training)
     test_lyrics, test_wordbags, test_titles = label_songs(testing)
@@ -203,12 +214,12 @@ def run():
         [*chain(*train_titles.values())],
     )
     category_idfs: Dict[str, Dict[str, float]] = {}
-    for cat in CATEGORIES:
+    for cat in categories:
         category_idfs[cat] = get_idf(train_wordbags[cat], train_lyrics[cat])
 
     category_tf_idfs = {}
     category_vectors = {}
-    for cat in CATEGORIES:
+    for cat in categories:
         category_tf_idfs[cat] = cat_tf_idf = get_tf_idf(
             category_idfs[cat], training_tf,
             train_lyrics[cat], train_titles[cat],
@@ -229,10 +240,10 @@ def run():
     predictions = {k: None for k in test_titles}
 
     for title, vec in testing_tf_idf.items():
-        song_similarities[title] = get_similarity(vec, category_vectors, CATEGORIES)
+        song_similarities[title] = get_similarity(vec, category_vectors, categories)
         predictions[title] = song_similarities[title][0][0]
 
-    stats(predictions, ground_truths, CATEGORIES)
-    scores = score(predictions, ground_truths, CATEGORIES)
+    stats(predictions, ground_truths, categories)
+    scores = score(predictions, ground_truths, categories)
     print_score(scores)
     export(predictions, ground_truths)

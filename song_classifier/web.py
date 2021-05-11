@@ -272,15 +272,18 @@ class Genius(APIClient, JSONExporter):
     async def _extract(self, url: str) -> str:
         res = await self._request(url=url)
         soup = BeautifulSoup((await res.read()).decode('utf8'), 'lxml')
-        target = soup.find('div', {'id': 'lyrics'})
-        if not target:
-            return
-        container = target.parent
-        lines = container.find_all('span')
         lyrics = []
-        for line in lines:
-            for s in line.stripped_strings:
-                lyrics.append(s)
+        elem = soup.find('div', {'id': 'lyrics'})
+        if elem:
+            elem = elem.parent
+        else:
+            elem = soup.find('div', {'class': 'lyrics'})
+        if not elem:
+            self._log.warning(f'No lyrics at {url}')
+            print(soup)
+            return
+        for line in elem.stripped_strings:
+            lyrics.append(line)
         return lyrics
 
     async def get_lyrics(self, mbz_id: str, title: str, artist: str):

@@ -12,32 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
-from collections import defaultdict
-from itertools import chain
 from typing import Dict, List, Set, Tuple
 
-from .database import Playlist, Song, get_db
 from .implementations.prep import Document
 
-Songs = List[Song]
+Songs = List
 Lyrics = List[List[str]]
 Titles = List[str]
 Wordbag = Set[str]
 
-LabeledSongs = Dict[str, Songs]
-GroundTruths = Dict[str, str]
 
-
-def convert_songs(songs: List[Song]) -> Tuple[Lyrics, Wordbag, Titles]:
+def convert_songs(songs: List) -> Tuple[Lyrics, Wordbag, Titles]:
     lyrics = []
     titles = []
     wordbag = set()
+    processed = {}
     for song in songs:
-        doc = Document(song.lyrics)
-        lyrics.append(doc.text)
+        if song.title in processed:
+            text = processed[song.title]
+        else:
+            doc = Document(song.lyrics)
+            text = doc.text
+            processed[song.title] = doc.text
+        lyrics.append(text)
         titles.append(song.title)
-        wordbag.update(doc.text)
+        wordbag.update(text)
     return lyrics, wordbag, titles
 
 
@@ -50,30 +49,7 @@ def label_songs(songs: Dict[str, Songs]) -> Tuple[Dict[str, Lyrics], Dict[str, W
     return lyrics, wordbags, titles
 
 
-def samples(sample_ratio: float, categories: List[str], keywords: Dict[str, List[str]], min_weight=2) -> Tuple[LabeledSongs, LabeledSongs, GroundTruths]:
-    db = get_db()
-    playlists = {k: [*chain.from_iterable(db.playlist_title_search(t) for t in v)] for k, v in keywords.items()}
-    songs_reversed: Dict[Song, Dict[str, List[Playlist]]] = defaultdict(lambda: defaultdict(list))
-    for k, v in playlists.items():
-        for p in v:
-            for s in p.songs:
-                songs_reversed[s][k].append(p)
-
-    training: Dict[str, List[Song]] = {k: [] for k in categories}
-    testing: Dict[str, List[Song]] = {k: [] for k in categories}
-
-    for s, c in songs_reversed.items():
-        if len(c) > 1:
-            continue
-        for k, ps in c.items():
-            if len(ps) >= min_weight:
-                # A song have a certain chance to go into the development set
-                # To reproduce the same sets, seed RNG
-                if random.random() < sample_ratio:
-                    training[k].append(s)
-                else:
-                    testing[k].append(s)
-
+def sort_songs(training: Dict[str, List], testing: Dict[str, List]):
     train_labels: Dict[str, str] = {}
     for cat, songs in training.items():
         for song in songs:
@@ -85,7 +61,7 @@ def samples(sample_ratio: float, categories: List[str], keywords: Dict[str, List
             test_truths[song.title] = cat
 
     print('Dataset stats:')
-    for k in categories:
+    for k in training.keys():
         print(f'{k}: training={len(training[k])} testing={len(testing[k])}')
 
-    return training, testing, train_labels, test_truths
+    return train_labels, test_truths

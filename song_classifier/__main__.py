@@ -27,18 +27,19 @@ from .util.settings import Settings
 
 
 @click.group()
-@click.option('-a', '--instance', default='project', required=True, type=click.Path(exists=True, file_okay=False))
+@click.option('-a', '--instance', required=True, type=click.Path(exists=True, file_okay=False))
+@click.option('-x', '--db-version')
 @click.option('-v', '--verbose', is_flag=True, default=False)
 @click.option('-s', '--seed', type=click.INT, required=False)
 @click.pass_context
-def main(ctx, instance, verbose, seed=None):
+def main(ctx, instance, db_version, verbose, seed=None):
     if seed:
         random.seed(seed)
     ctx.ensure_object(dict)
     config_logging(level=10 if verbose else 20)
     settings = Settings()
     settings['DB_ECHO'] = verbose
-    Application(instance)
+    Application(instance, int(db_version))
 
 
 def find_commands():
@@ -57,13 +58,17 @@ def find_commands():
 @main.command()
 def cosine():
     from .implementations.tfidf import run
-    run()
+    for i in range(3):
+        print(f'Run #{i}')
+        run()
 
 
 @main.command()
 def knn():
     from .implementations.knn import run
-    run()
+    for i in range(3):
+        print(f'Run #{i}')
+        run()
 
 
 @main.command()
@@ -90,6 +95,12 @@ def nuclear(input_dir):
 
 
 @main.command()
+def import2():
+    from .prep_v2 import scanner
+    scanner(Path('instance/scrape'))
+
+
+@main.command()
 def version():
     from . import __version__
     from .database import VERSION
@@ -99,5 +110,5 @@ def version():
 
 
 if __name__ == '__main__':
-    find_commands()
+    # find_commands()
     main(prog_name='python -m song_classifier')

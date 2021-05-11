@@ -24,9 +24,10 @@ app: Application = None
 
 
 class Application:
-    def __init__(self, instance: PathLike, profiles=(), **kwargs):
+    def __init__(self, instance: PathLike, version: int, profiles=(), **kwargs):
         global app
         app = self
+        self._version = version
 
         self.root = Path(instance)
         self.log = logging.getLogger('soundfinder')
@@ -50,7 +51,10 @@ class Application:
         self.settings = settings
 
     def _init_components(self):
-        from .database import Database
+        if self._version == 1:
+            from .database import Database
+        else:
+            from .database_v2 import Database
         Database(self.root / 'index.db', **self.settings['db':])
 
 

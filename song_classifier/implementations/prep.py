@@ -49,6 +49,7 @@ STOP_WORDS = {
     'him', 'his', 'her', 'she', 'it', 'they', 'them', 'its', 'their', 'theirs',
     'you', 'your', 'yours', 'me', 'my', 'mine', 'I', 'we', 'us', 'much', 'and/or',
     *string.punctuation,
+    'verse', 'chorus', 'intro', 'repeat',
 }
 
 ALPHABETS = re.compile(r'[A-Za-z]')
