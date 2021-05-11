@@ -24,6 +24,7 @@ def init_nltk():
     nltk.download('punkt', quiet=True)
     nltk.download('wordnet', quiet=True)
     nltk.download('stopwords', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
 
 
 STOP_WORDS = {
@@ -52,6 +53,15 @@ STOP_WORDS = {
     'verse', 'chorus', 'intro', 'repeat', 'instrumental', 'vocal', 'pre',
 }
 
+ACCEPT_TAGS = {
+    'FW',
+    'JJ', 'JJR', 'JJS',
+    'NN', 'NNP', 'NNPS', 'NNS',
+    'RB', 'RBR', 'RBS',
+    'UH',
+    'VB', 'VBD', 'VBZ', 'VBG', 'VBP', 'VBN',
+}
+
 ALPHABETS = re.compile(r'[A-Za-z]')
 SPLITTING = re.compile(r'\W+')
 
@@ -65,6 +75,8 @@ class Document:
 
     def postprocess_tokens(self):
         tokens = self.text
+        pos = nltk.pos_tag(tokens)
+        tokens = [t for t, p in pos if p in ACCEPT_TAGS]
         tokens = [t.lower() for t in tokens]
         tokens = [t for t in tokens if t not in STOP_WORDS]
         tokens = self.split_punctuation(tokens)
