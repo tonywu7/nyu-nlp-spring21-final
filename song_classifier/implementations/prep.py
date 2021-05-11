@@ -54,12 +54,12 @@ STOP_WORDS = {
 }
 
 ACCEPT_TAGS = {
-    'FW',
-    'JJ', 'JJR', 'JJS',
+    # 'FW',
+    # 'JJ', 'JJR', 'JJS',
     'NN', 'NNP', 'NNPS', 'NNS',
-    'RB', 'RBR', 'RBS',
-    'UH',
-    'VB', 'VBD', 'VBZ', 'VBG', 'VBP', 'VBN',
+    # 'RB', 'RBR', 'RBS',
+    # 'UH',
+    # 'VB', 'VBD', 'VBZ', 'VBG', 'VBP', 'VBN',
 }
 
 ALPHABETS = re.compile(r'[A-Za-z]')
@@ -83,7 +83,7 @@ class Document:
         tokens = self.strip_punctuation(tokens)
         tokens = self.remove_non_alphabetic(tokens)
         tokens = self.lemmatized(tokens)
-        tokens = self.keep_min_length(tokens, 3)
+        # tokens = self.keep_min_length(tokens, 3)
         self.text = tokens
 
     def strip_punctuation(self, tokens: List[str]) -> List[str]:

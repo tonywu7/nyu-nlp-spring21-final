@@ -21,7 +21,7 @@ import sklearn
 from sklearn.neighbors import KNeighborsClassifier
 
 from ..collector import samples
-from ..scoring import export, print_score, score, stats
+from ..scoring import print_score, score, stats
 from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
 from ..training import convert_songs, sort_songs
 from .prep import init_nltk
@@ -98,5 +98,5 @@ def run():
 
     stats(predictions, test_truths, categories)
     scores = score(predictions, test_truths, categories)
-    print_score(scores)
-    export(dict(predictions), test_truths)
+    print_score(*scores)
+    # export(dict(predictions), test_truths)

@@ -14,6 +14,7 @@
 
 from collections import defaultdict
 from datetime import datetime
+from statistics import mean
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -32,6 +33,9 @@ def score(predictions: Dict[str, str], ground_truths: Dict[str, str], categories
     tp = defaultdict(int)
     fp = defaultdict(int)
     fn = defaultdict(int)
+
+    gt = np.array([*ground_truths.values()])
+    counts = {k: np.count_nonzero(gt == k) for k in categories}
 
     for k, prediction in predictions.items():
         truth = ground_truths[k]
@@ -63,12 +67,26 @@ def score(predictions: Dict[str, str], ground_truths: Dict[str, str], categories
         except ZeroDivisionError:
             fscore[c] = -1
 
-    summary = {}
+    percat = {}
     for c in categories:
         p, r, f = precisions[c], recall[c], fscore[c]
-        summary[c] = (p, r, f)
+        percat[c] = (p, r, f)
 
-    return summary
+    accuracy = sum(tp.values()) / (sum(tp.values()) + .5 * (sum(fp.values()) + sum(fn.values())))
+
+    macro = {
+        'precision': mean(precisions.values()),
+        'recall': mean(recall.values()),
+        'f-score': mean(fscore.values()),
+    }
+
+    weighted = {
+        'precision': sum(precisions[k] * counts[k] for k in categories) / sum(counts.values()),
+        'recall': sum(recall[k] * counts[k] for k in categories) / sum(counts.values()),
+        'f-score': sum(fscore[k] * counts[k] for k in categories) / sum(counts.values()),
+    }
+
+    return percat, macro, weighted, accuracy
 
 
 def export(predictions: Dict[str, str], ground_truths: Dict[str, str]):
@@ -83,7 +101,14 @@ def export(predictions: Dict[str, str], ground_truths: Dict[str, str]):
     df.to_csv(filename, index=True, header=True)
 
 
-def print_score(stats):
-    print('Scores:')
-    for k, (p, r, f) in stats.items():
+def print_score(percat, macro, weighted, accuracy):
+    print('Per category:')
+    for k, (p, r, f) in percat.items():
         print(f'{k}: precision={p:.3f} recall={r:.3f} f-score={f:.3f}')
+    print('Macro:')
+    for k, v in macro.items():
+        print(f'{k}: {v}')
+    print('Weighted:')
+    for k, v in weighted.items():
+        print(f'{k}: {v}')
+    print(f'Accuracy: {accuracy}')

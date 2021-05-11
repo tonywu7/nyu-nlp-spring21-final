@@ -16,10 +16,8 @@ import math
 from itertools import chain
 from typing import Dict, List, Tuple
 
-import pandas as pd
-
 from ..collector import samples
-from ..scoring import export, print_score, score, stats
+from ..scoring import print_score, score, stats
 from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
 from ..training import Lyrics, Titles, Wordbag, label_songs, sort_songs
 from .prep import init_nltk
@@ -166,19 +164,6 @@ def get_similarity(test_song_vec: Vector, category_vectors: Dict[str, Vector]) -
     return song_similarity
 
 
-def save_vectors(tfidf_vectors, labels, category):
-    csv_columns = ['Title', 'Vector', 'Label']
-    df = pd.DataFrame(columns=csv_columns)
-    df['Title'] = tfidf_vectors.keys()
-    df['Vector'] = tfidf_vectors
-
-    # labels are categories in numerical values, so happy = 1, relaxed = 2...
-    df['Label'] = labels
-
-    filePath = f'tfidfVectors_{category}.csv'
-    df.to_csv(filePath, index=False, header=True)
-
-
 def master_tf_idf(lyrics: Lyrics, titles: Titles, wordbag: Wordbag):
     tf = get_all_tf(lyrics, titles)
     idf = get_idf(wordbag, lyrics)
@@ -242,5 +227,5 @@ def run():
 
     stats(predictions, ground_truths, categories)
     scores = score(predictions, ground_truths, categories)
-    print_score(scores)
-    export(predictions, ground_truths)
+    print_score(*scores)
+    # export(predictions, ground_truths)
