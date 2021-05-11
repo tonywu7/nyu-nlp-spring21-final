@@ -55,9 +55,9 @@ STOP_WORDS = {
 
 ACCEPT_TAGS = {
     # 'FW',
-    # 'JJ', 'JJR', 'JJS',
+    'JJ', 'JJR', 'JJS',
     'NN', 'NNP', 'NNPS', 'NNS',
-    # 'RB', 'RBR', 'RBS',
+    'RB', 'RBR', 'RBS',
     # 'UH',
     # 'VB', 'VBD', 'VBZ', 'VBG', 'VBP', 'VBN',
 }

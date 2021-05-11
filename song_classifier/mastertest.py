@@ -49,6 +49,12 @@ def test(seed: int):
     categories = {'cat4': CATEGORIES_4, 'cat2': CATEGORIES_2}
     keywords = {'playlists4': KEYWORDS_4, 'playlist2': KEYWORDS_2}
     postprocessors = {
+        'characters': [
+            Document.split_punctuation,
+            Document.strip_punctuation,
+            Document.remove_non_alphabetic,
+            Document.to_lower,
+        ],
         'lexical': [
             Document.split_punctuation,
             Document.strip_punctuation,
@@ -66,19 +72,9 @@ def test(seed: int):
             Document.lemmatized,
             Document.filter_by_pos,
         ],
-        'lexical,syntactic,statistical': [
-            Document.remove_non_alphabetic,
-            Document.split_punctuation,
-            Document.strip_punctuation,
-            Document.to_lower,
-            Document.filter_stop_words,
-            Document.lemmatized,
-            Document.filter_by_pos,
-            Document.keep_min_length,
-        ],
     }
     min_weight = {str(i): i for i in (1, 2)}
-    knn_n_neighbors = {str(i): i for i in (1, 4, 7, 10)}
+    knn_n_neighbors = {str(i): i for i in (7, 10)}
 
     jobs = []
 
