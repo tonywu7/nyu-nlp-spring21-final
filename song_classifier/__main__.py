@@ -38,6 +38,7 @@ def main(ctx, instance, verbose, seed=None):
     config_logging(level=10 if verbose else 20)
     settings = Settings()
     settings['DB_ECHO'] = verbose
+    ctx.obj['SEED'] = seed
     Application(instance)
 
 
@@ -68,6 +69,13 @@ def knn():
     for i in range(1):
         print(f'Run #{i}')
         run()
+
+
+@main.command()
+@click.pass_context
+def master(ctx):
+    from .mastertest import test
+    test(ctx.obj['SEED'])
 
 
 @main.command()

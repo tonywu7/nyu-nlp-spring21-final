@@ -22,7 +22,6 @@ from sklearn.neighbors import KNeighborsClassifier
 
 from ..collector import samples
 from ..scoring import print_score, score, stats
-from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
 from ..training import convert_songs, sort_songs
 from .prep import init_nltk
 from .tfidf import master_tf_idf
@@ -55,8 +54,8 @@ def kmeans(tf_idf_vectors: TFIDFVectors, features: Set[str], categories: List[st
     return labels
 
 
-def knn_train(tf_idf_vectors: TFIDFVectors, features: Set[str], targets: List[Tuple[str, str]]):
-    model = KNeighborsClassifier(n_neighbors=7)
+def knn_train(tf_idf_vectors: TFIDFVectors, features: Set[str], targets: List[Tuple[str, str]], neighbors):
+    model = KNeighborsClassifier(n_neighbors=neighbors)
     samples, matrix = sparsematrix(tf_idf_vectors, features)
     labels = np.array(targets)
     model.fit(matrix, labels[:, 1])
@@ -69,17 +68,16 @@ def knn_classify(model: KNeighborsClassifier, features: Set[str], test_vectors: 
     return dict(zip(samples, labels))
 
 
-def run():
+def run(ratio, categories, keywords, postprocessors, min_weight, knn_n_neighbors, *args, **kwargs):
     init_nltk()
 
     print('Loading songs')
 
-    training, testing = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
-    categories = CATEGORIES
+    training, testing = samples(ratio, categories, keywords, min_weight)
     train_labels, test_truths = sort_songs(training, testing)
 
-    train_lyrics, train_wordbag, train_titles = convert_songs([*chain(*training.values())])
-    test_lyrics, test_wordbag, test_titles = convert_songs([*chain(*testing.values())])
+    train_lyrics, train_wordbag, train_titles = convert_songs([*chain(*training.values())], postprocessors)
+    test_lyrics, test_wordbag, test_titles = convert_songs([*chain(*testing.values())], postprocessors)
     features = train_wordbag | test_wordbag
 
     print('Calculating tf-idf')
@@ -87,14 +85,14 @@ def run():
     test_tfidf = master_tf_idf(test_lyrics, test_titles, features)
 
     print('Fitting')
-    titlemap, model = knn_train(train_tfidf, features, [*train_labels.items()])
-    (pd.DataFrame([[k, train_labels[k], ' '.join(train_lyrics[i])] for i, k in enumerate(titlemap)])
-     .to_csv('labels-training.csv', index=False, header=False))
+    titlemap, model = knn_train(train_tfidf, features, [*train_labels.items()], knn_n_neighbors)
+    # (pd.DataFrame([[k, train_labels[k], ' '.join(train_lyrics[i])] for i, k in enumerate(titlemap)])
+    #  .to_csv('labels-training.csv', index=False, header=False))
 
     print('Classifying')
     predictions = dict(knn_classify(model, features, test_tfidf))
-    (pd.DataFrame([[k, test_truths[k], ' '.join(test_lyrics[i])] for i, k in enumerate(predictions)])
-     .to_csv('labels-testing.csv', index=False, header=False))
+    # (pd.DataFrame([[k, test_truths[k], ' '.join(test_lyrics[i])] for i, k in enumerate(predictions)])
+    #  .to_csv('labels-testing.csv', index=False, header=False))
 
     stats(predictions, test_truths, categories)
     scores = score(predictions, test_truths, categories)

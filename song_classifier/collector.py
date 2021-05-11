@@ -24,7 +24,7 @@ LabeledSongs = Dict[str, Songs]
 GroundTruths = Dict[str, str]
 
 
-def samples(sample_ratio: float, categories: List[str], keywords: Dict[str, List[str]], min_weight=2) -> Tuple[LabeledSongs, LabeledSongs]:
+def samples(sample_ratio: float, categories: List[str], keywords: Dict[str, List[str]], min_weight: int) -> Tuple[LabeledSongs, LabeledSongs]:
     db = get_db()
     playlists = {k: [*chain.from_iterable(db.playlist_title_search(t) for t in v)] for k, v in keywords.items()}
     songs_reversed: Dict[Song, Dict[str, List[Playlist]]] = defaultdict(lambda: defaultdict(list))

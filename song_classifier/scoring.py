@@ -102,13 +102,13 @@ def export(predictions: Dict[str, str], ground_truths: Dict[str, str]):
 
 
 def print_score(percat, macro, weighted, accuracy):
-    print('Per category:')
+    print('  Per category:')
     for k, (p, r, f) in percat.items():
-        print(f'{k}: precision={p:.3f} recall={r:.3f} f-score={f:.3f}')
-    print('Macro:')
+        print(f'    {k}: precision={p:.3f} recall={r:.3f} f-score={f:.3f}')
+    print('  Macro:')
     for k, v in macro.items():
-        print(f'{k}: {v}')
-    print('Weighted:')
+        print(f'    {k}: {v}')
+    print('  Weighted:')
     for k, v in weighted.items():
-        print(f'{k}: {v}')
-    print(f'Accuracy: {accuracy}')
+        print(f'    {k}: {v}')
+    print(f'  Accuracy: {accuracy}')

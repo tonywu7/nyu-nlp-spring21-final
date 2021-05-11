@@ -18,7 +18,6 @@ from typing import Dict, List, Tuple
 
 from ..collector import samples
 from ..scoring import print_score, score, stats
-from ..settings import CATEGORIES, KEYWORDS, TESTING_RATIO
 from ..training import Lyrics, Titles, Wordbag, label_songs, sort_songs
 from .prep import init_nltk
 
@@ -171,18 +170,18 @@ def master_tf_idf(lyrics: Lyrics, titles: Titles, wordbag: Wordbag):
     return tf_idf
 
 
-def run():
+def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs):
     init_nltk()
 
     # Load songs
     print('Loading songs')
 
-    training, testing = samples(TESTING_RATIO, CATEGORIES, KEYWORDS)
-    categories = CATEGORIES
+    training, testing = samples(ratio, categories, keywords, min_weight)
+    categories = categories
     _, ground_truths = sort_songs(training, testing)
 
-    train_lyrics, train_wordbags, train_titles = label_songs(training)
-    test_lyrics, test_wordbags, test_titles = label_songs(testing)
+    train_lyrics, train_wordbags, train_titles = label_songs(training, postprocessors)
+    test_lyrics, test_wordbags, test_titles = label_songs(testing, postprocessors)
 
     print('Training')
 

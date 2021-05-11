@@ -71,41 +71,52 @@ class Document:
 
     def __init__(self, text: str):
         self.text: List[str] = nltk.tokenize.word_tokenize(text)
-        self.postprocess_tokens()
 
-    def postprocess_tokens(self):
+    def postprocess_tokens(self, *functions):
         tokens = self.text
-        pos = nltk.pos_tag(tokens)
-        tokens = [t for t, p in pos if p in ACCEPT_TAGS]
-        tokens = [t.lower() for t in tokens]
-        tokens = [t for t in tokens if t not in STOP_WORDS]
-        tokens = self.split_punctuation(tokens)
-        tokens = self.strip_punctuation(tokens)
-        tokens = self.remove_non_alphabetic(tokens)
-        tokens = self.lemmatized(tokens)
-        # tokens = self.keep_min_length(tokens, 3)
+        for f in functions:
+            tokens = f(tokens)
         self.text = tokens
 
-    def strip_punctuation(self, tokens: List[str]) -> List[str]:
+    @classmethod
+    def filter_stop_words(cls, tokens: List[str]) -> List[str]:
+        return [t for t in tokens if t not in STOP_WORDS]
+
+    @classmethod
+    def to_lower(cls, tokens: List[str]) -> List[str]:
+        return [t.lower() for t in tokens]
+
+    @classmethod
+    def filter_by_pos(cls, tokens: List[str]) -> List[str]:
+        pos = nltk.pos_tag(tokens)
+        tokens = [t for t, p in pos if p in ACCEPT_TAGS]
+        return tokens
+
+    @classmethod
+    def strip_punctuation(cls, tokens: List[str]) -> List[str]:
         return [t.strip(string.punctuation) for t in tokens]
 
-    def remove_non_alphabetic(self, tokens: List[str]) -> List[str]:
+    @classmethod
+    def remove_non_alphabetic(cls, tokens: List[str]) -> List[str]:
         return [t for t in tokens if ALPHABETS.search(t)]
 
-    def keep_min_length(self, tokens: List[str], length) -> List[str]:
+    @classmethod
+    def keep_min_length(cls, tokens: List[str], length=3) -> List[str]:
         return [t for t in tokens if len(t) >= length]
 
-    def lemmatized(self, tokens: List[str]) -> List[str]:
+    @classmethod
+    def lemmatized(cls, tokens: List[str]) -> List[str]:
         lemmatized = []
         for word in tokens:
-            lemma = self.lemmatize(word)
+            lemma = cls.lemmatize(word)
             if lemma != word:
                 lemmatized.append(lemma)
         return [*tokens, *lemmatized]
 
-    def split_punctuation(self, tokens: List[str]) -> List[str]:
+    @classmethod
+    def split_punctuation(cls, tokens: List[str]) -> List[str]:
         occurrences = []
-        for word in self.text:
+        for word in tokens:
             parts = SPLITTING.split(word)
             if len(parts) > 1:
                 occurrences.extend(parts)

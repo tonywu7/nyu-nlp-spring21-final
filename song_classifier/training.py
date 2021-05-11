@@ -22,12 +22,13 @@ Titles = List[str]
 Wordbag = Set[str]
 
 
-def convert_songs(songs: List) -> Tuple[Lyrics, Wordbag, Titles]:
+def convert_songs(songs: List, postprocessors) -> Tuple[Lyrics, Wordbag, Titles]:
     lyrics = []
     titles = []
     wordbag = set()
     for song in songs:
         doc = Document(song.lyrics)
+        doc.postprocess_tokens(*postprocessors)
         text = doc.text
         lyrics.append(text)
         titles.append(song.title)
@@ -35,12 +36,12 @@ def convert_songs(songs: List) -> Tuple[Lyrics, Wordbag, Titles]:
     return lyrics, wordbag, titles
 
 
-def label_songs(songs: Dict[str, Songs]) -> Tuple[Dict[str, Lyrics], Dict[str, Wordbag], Dict[str, Titles]]:
+def label_songs(songs: Dict[str, Songs], postprocessors) -> Tuple[Dict[str, Lyrics], Dict[str, Wordbag], Dict[str, Titles]]:
     lyrics = {}
     wordbags = {}
     titles = {}
     for cat, songs_in_cat in songs.items():
-        lyrics[cat], wordbags[cat], titles[cat] = convert_songs(songs_in_cat)
+        lyrics[cat], wordbags[cat], titles[cat] = convert_songs(songs_in_cat, postprocessors)
     return lyrics, wordbags, titles
 
 
