@@ -57,7 +57,7 @@ def find_commands():
 @main.command()
 def cosine():
     from .implementations.tfidf import run
-    for i in range(3):
+    for i in range(1):
         print(f'Run #{i}')
         run()
 
@@ -65,7 +65,7 @@ def cosine():
 @main.command()
 def knn():
     from .implementations.knn import run
-    for i in range(3):
+    for i in range(1):
         print(f'Run #{i}')
         run()
 

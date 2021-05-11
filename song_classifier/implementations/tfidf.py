@@ -14,7 +14,7 @@
 
 import math
 from itertools import chain
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import pandas as pd
 
@@ -134,8 +134,8 @@ def get_tf_idf_category(tf_idf_category: Dict[str, Vector], word_list: List[str]
     return category_vector
 
 
-def get_similarity(test_song_vec: Vector, category_vectors: Dict[str, Vector], categories: List[str]):
-    song_similarity = dict.fromkeys(categories)
+def get_similarity(test_song_vec: Vector, category_vectors: Dict[str, Vector]) -> List[Tuple[str, float]]:
+    song_similarity = {k: None for k in category_vectors}
 
     for category_name, vec in category_vectors.items():
         cat_vec = []
@@ -220,6 +220,9 @@ def run():
             cat_tf_idf, train_wordbags[cat],
         )
 
+    from ..reflection import vector_distances
+    print(vector_distances(category_vectors))
+
     print('Testing')
 
     test_wordbag_all = {*chain(*test_wordbags.values())}
@@ -232,8 +235,10 @@ def run():
     predictions = {k: None for k in test_titles}
 
     for title, vec in testing_tf_idf.items():
-        song_similarities[title] = get_similarity(vec, category_vectors, categories)
-        predictions[title] = song_similarities[title][0][0]
+        song_similarities[title] = get_similarity(vec, category_vectors)
+        pred, sim = song_similarities[title][0]
+        predictions[title] = pred
+        # print(title, pred, sim)
 
     stats(predictions, ground_truths, categories)
     scores = score(predictions, ground_truths, categories)
