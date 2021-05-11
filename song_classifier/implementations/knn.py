@@ -42,7 +42,7 @@ def sparsematrix(vectors: TFIDFVectors, features: Set[str], name: str = None) ->
         samples[idx] = key
         for term, val in tfidf.items():
             matrix[idx, features[term]] = val
-    if name:
+    if name and False:
         export_matrix(matrix, name)
     return samples, matrix
 

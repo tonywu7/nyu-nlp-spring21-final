@@ -1,0 +1,247 @@
+algo=cosine;cat=cat2;post=lexical,syntactic;threshold=1
+
+  Loading songs
+  Dataset stats:
+  positive: training=13606 testing=3353
+  negative: training=4008 testing=1011
+  Training
+           positive negative
+  positive      1.0  0.98892
+  negative  0.98892      1.0
+  Testing
+  # results
+  positive: 3675 predicted 3260 expected
+  negative: 593 predicted 1008 expected
+    Per category:
+      positive: precision=0.800 recall=0.902 f-score=0.848
+      negative: precision=0.459 recall=0.270 f-score=0.340
+    Macro:
+      precision: 0.6292062727283156
+      recall: 0.5856875060862791
+      f-score: 0.5936861739711167
+    Weighted:
+      precision: 0.7191815971660352
+      recall: 0.7523430178069354
+      f-score: 0.727655132470653
+    Accuracy: 0.7523430178069354
+
+algo=cosine;cat=cat2;post=lexical,syntactic;threshold=2
+
+  Loading songs
+  Dataset stats:
+  positive: training=6701 testing=1678
+  negative: training=2132 testing=558
+  Training
+            positive  negative
+  positive       1.0  0.985489
+  negative  0.985489       1.0
+  Testing
+  # results
+  positive: 1510 predicted 1655 expected
+  negative: 703 predicted 558 expected
+    Per category:
+      positive: precision=0.846 recall=0.772 f-score=0.808
+      negative: precision=0.464 recall=0.584 f-score=0.517
+    Macro:
+      precision: 0.655042250336778
+      recall: 0.6782174143737344
+      f-score: 0.6623164493687775
+    Weighted:
+      precision: 0.7498786516094015
+      recall: 0.7248079530049706
+      f-score: 0.7343260916890546
+    Accuracy: 0.7248079530049706
+
+algo=cosine;cat=cat2;post=lexical;threshold=1
+
+  Loading songs
+  Dataset stats:
+  positive: training=13460 testing=3499
+  negative: training=4036 testing=983
+  Training
+            positive  negative
+  positive       1.0  0.988459
+  negative  0.988459       1.0
+  Testing
+  # results
+  positive: 3574 predicted 3408 expected
+  negative: 814 predicted 980 expected
+    Per category:
+      positive: precision=0.814 recall=0.854 f-score=0.834
+      negative: precision=0.389 recall=0.323 f-score=0.353
+    Macro:
+      precision: 0.6019642270341766
+      recall: 0.5888180272108843
+      f-score: 0.5936293581169224
+    Weighted:
+      precision: 0.7195625022600357
+      recall: 0.7356426618049225
+      f-score: 0.726554686318335
+    Accuracy: 0.7356426618049225
+
+algo=cosine;cat=cat2;post=lexical;threshold=2
+
+  Loading songs
+  Dataset stats:
+  positive: training=6708 testing=1671
+  negative: training=2156 testing=534
+  Training
+            positive  negative
+  positive       1.0  0.985118
+  negative  0.985118       1.0
+  Testing
+  # results
+  positive: 1358 predicted 1643 expected
+  negative: 818 predicted 533 expected
+    Per category:
+      positive: precision=0.847 recall=0.700 f-score=0.766
+      negative: precision=0.397 recall=0.610 f-score=0.481
+    Macro:
+      precision: 0.6220720461198872
+      recall: 0.6548476166441518
+      f-score: 0.6237681443959835
+    Weighted:
+      precision: 0.7367252176577661
+      recall: 0.6778492647058824
+      f-score: 0.696531833540211
+    Accuracy: 0.6778492647058824
+
+algo=cosine;cat=cat4;post=lexical,syntactic;threshold=1
+
+  Loading songs
+  Dataset stats:
+  happy: training=4423 testing=1068
+  sad: training=1766 testing=430
+  relaxed: training=5169 testing=1352
+  angry: training=2104 testing=561
+  Training
+              happy       sad   relaxed     angry
+  happy         1.0  0.981779  0.973693  0.982326
+  sad      0.981779       1.0  0.973837  0.968915
+  relaxed  0.973693  0.973837       1.0   0.96267
+  angry    0.982326  0.968915   0.96267       1.0
+  Testing
+  # results
+  happy: 118 predicted 1038 expected
+  sad: 241 predicted 429 expected
+  relaxed: 2809 predicted 1332 expected
+  angry: 190 predicted 559 expected
+    Per category:
+      happy: precision=0.458 recall=0.052 f-score=0.093
+      sad: precision=0.527 recall=0.296 f-score=0.379
+      relaxed: precision=0.432 recall=0.911 f-score=0.586
+      angry: precision=0.442 recall=0.150 f-score=0.224
+    Macro:
+      precision: 0.46463240221342955
+      recall: 0.35224735360002196
+      f-score: 0.3206694943385377
+    Weighted:
+      precision: 0.45366793505256453
+      recall: 0.4401429422275164
+      f-score: 0.34703556192804397
+    Accuracy: 0.4401429422275164
+
+algo=cosine;cat=cat4;post=lexical,syntactic;threshold=2
+
+  Loading songs
+  Dataset stats:
+  happy: training=1385 testing=368
+  sad: training=1341 testing=316
+  relaxed: training=1328 testing=351
+  angry: training=693 testing=182
+  Training
+              happy       sad   relaxed     angry
+  happy         1.0  0.966078  0.950999  0.958574
+  sad      0.966078       1.0   0.95956  0.939844
+  relaxed  0.950999   0.95956       1.0  0.935678
+  angry    0.958574  0.939844  0.935678       1.0
+  Testing
+  # results
+  happy: 54 predicted 365 expected
+  sad: 155 predicted 316 expected
+  relaxed: 914 predicted 351 expected
+  angry: 91 predicted 182 expected
+    Per category:
+      happy: precision=0.519 recall=0.077 f-score=0.134
+      sad: precision=0.735 recall=0.361 f-score=0.484
+      relaxed: precision=0.357 recall=0.929 f-score=0.515
+      angry: precision=0.549 recall=0.275 f-score=0.366
+    Macro:
+      precision: 0.5400317248873754
+      recall: 0.4102430064845532
+      f-score: 0.3748608426242201
+    Weighted:
+      precision: 0.5328374980725868
+      recall: 0.42668863261943984
+      f-score: 0.37012216449652763
+    Accuracy: 0.42668863261943984
+
+algo=cosine;cat=cat4;post=lexical;threshold=1
+
+  Loading songs
+  Dataset stats:
+  happy: training=4428 testing=1063
+  sad: training=1732 testing=464
+  relaxed: training=5184 testing=1337
+  angry: training=2091 testing=574
+  Training
+              happy       sad   relaxed     angry
+  happy         1.0  0.980519  0.974481   0.98019
+  sad      0.980519       1.0  0.974996  0.963829
+  relaxed  0.974481  0.974996       1.0  0.961717
+  angry     0.98019  0.963829  0.961717       1.0
+  Testing
+  # results
+  happy: 87 predicted 1035 expected
+  sad: 255 predicted 463 expected
+  relaxed: 2691 predicted 1316 expected
+  angry: 353 predicted 572 expected
+    Per category:
+      happy: precision=0.517 recall=0.043 f-score=0.080
+      sad: precision=0.522 recall=0.287 f-score=0.370
+      relaxed: precision=0.432 recall=0.884 f-score=0.580
+      angry: precision=0.360 recall=0.222 f-score=0.275
+    Macro:
+      precision: 0.4576911807727412
+      recall: 0.3591254635399226
+      f-score: 0.32644154716877116
+    Weighted:
+      precision: 0.4581725105386395
+      recall: 0.43354991139988186
+      f-score: 0.3471753961575782
+    Accuracy: 0.43354991139988186
+
+algo=cosine;cat=cat4;post=lexical;threshold=2
+
+  Loading songs
+  Dataset stats:
+  happy: training=1423 testing=330
+  sad: training=1329 testing=328
+  relaxed: training=1348 testing=331
+  angry: training=701 testing=174
+  Training
+              happy       sad   relaxed     angry
+  happy         1.0  0.968171  0.951867  0.954115
+  sad      0.968171       1.0  0.958309  0.935333
+  relaxed  0.951867  0.958309       1.0  0.932709
+  angry    0.954115  0.935333  0.932709       1.0
+  Testing
+  # results
+  happy: 38 predicted 326 expected
+  sad: 129 predicted 328 expected
+  relaxed: 861 predicted 330 expected
+  angry: 130 predicted 174 expected
+    Per category:
+      happy: precision=0.447 recall=0.052 f-score=0.093
+      sad: precision=0.690 recall=0.271 f-score=0.389
+      relaxed: precision=0.345 recall=0.900 f-score=0.499
+      angry: precision=0.454 recall=0.339 f-score=0.388
+    Macro:
+      precision: 0.4840211976776445
+      recall: 0.3906422906121382
+      f-score: 0.3424504400059739
+    Weighted:
+      precision: 0.4878572213204145
+      recall: 0.39896373056994816
+      f-score: 0.33707195977535687
+    Accuracy: 0.39896373056994816

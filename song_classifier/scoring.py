@@ -37,13 +37,19 @@ def score(predictions: Dict[str, str], ground_truths: Dict[str, str], categories
     gt = np.array([*ground_truths.values()])
     counts = {k: np.count_nonzero(gt == k) for k in categories}
 
+    confusion = pd.DataFrame(index=categories, columns=categories, data=0)
+
     for k, prediction in predictions.items():
         truth = ground_truths[k]
+        confusion.loc[truth, prediction] += 1
         if prediction == truth:
             tp[truth] += 1
         else:
             fp[prediction] += 1
             fn[truth] += 1
+
+    for k in confusion:
+        confusion.loc[k, :] /= confusion.loc[k, :].sum()
 
     precisions = defaultdict(int)
     recall = defaultdict(int)
@@ -86,7 +92,7 @@ def score(predictions: Dict[str, str], ground_truths: Dict[str, str], categories
         'f-score': sum(fscore[k] * counts[k] for k in categories) / sum(counts.values()),
     }
 
-    return percat, macro, weighted, accuracy
+    return percat, macro, weighted, accuracy, confusion
 
 
 def export(predictions: Dict[str, str], ground_truths: Dict[str, str]):
@@ -101,7 +107,7 @@ def export(predictions: Dict[str, str], ground_truths: Dict[str, str]):
     df.to_csv(filename, index=True, header=True)
 
 
-def print_score(percat, macro, weighted, accuracy):
+def print_score(percat, macro, weighted, accuracy, confusion):
     print('  Per category:')
     for k, (p, r, f) in percat.items():
         print(f'    {k}: precision={p:.3f} recall={r:.3f} f-score={f:.3f}')
@@ -112,3 +118,5 @@ def print_score(percat, macro, weighted, accuracy):
     for k, v in weighted.items():
         print(f'    {k}: {v}')
     print(f'  Accuracy: {accuracy}')
+    print('  Confusion')
+    print(confusion)

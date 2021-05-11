@@ -1,0 +1,53 @@
+algo=cosine;cat=cat2;post=lexical,syntactic;threshold=2
+
+  Loading songs
+  Dataset stats:
+  positive: training=8000 testing=2346
+  negative: training=8000 testing=3265
+  Training
+           positive negative
+  positive      1.0      0.0
+  negative      0.0      1.0
+  Testing
+  # results
+  positive: 4534 predicted 2346 expected
+  negative: 1077 predicted 3265 expected
+    Per category:
+      positive: precision=0.457 recall=0.882 f-score=0.602
+      negative: precision=0.744 recall=0.245 f-score=0.369
+    Macro:
+      precision: 0.6001415489037947
+      recall: 0.563841095396811
+      f-score: 0.4853492924705151
+    Weighted:
+      precision: 0.6236596681791094
+      recall: 0.5116734984851186
+      f-score: 0.46628550576648004
+    Accuracy: 0.5116734984851186
+
+algo=cosine;cat=cat2;post=lexical;threshold=2
+
+  Loading songs
+  Dataset stats:
+  positive: training=8000 testing=2233
+  negative: training=8000 testing=3211
+  Training
+           positive negative
+  positive      1.0      0.0
+  negative      0.0      1.0
+  Testing
+  # results
+  positive: 4398 predicted 2233 expected
+  negative: 1046 predicted 3211 expected
+    Per category:
+      positive: precision=0.447 recall=0.881 f-score=0.593
+      negative: precision=0.746 recall=0.243 f-score=0.366
+    Macro:
+      precision: 0.5964733230905409
+      recall: 0.5618963613518968
+      f-score: 0.4798646330808515
+    Weighted:
+      precision: 0.6232811175502182
+      recall: 0.5045922116091109
+      f-score: 0.45949094158916
+    Accuracy: 0.5045922116091109

@@ -46,8 +46,8 @@ def run_test(name, function, parameters, seed=None):
 
 def params_1():
     algorithms = {'cosine': run_cosine}
-    categories = {'cat4': CATEGORIES_4, 'cat2': CATEGORIES_2}
-    keywords = {'playlists4': KEYWORDS_4, 'playlist2': KEYWORDS_2}
+    categories = {'cat4': CATEGORIES_4}
+    keywords = {'playlists4': KEYWORDS_4}
     postprocessors = {
         'lexical,syntactic': [
             Document.remove_non_alphabetic,
@@ -66,16 +66,22 @@ def params_1():
             Document.filter_stop_words,
             Document.lemmatized,
         ],
+        'characters': [
+            Document.split_punctuation,
+            Document.strip_punctuation,
+            Document.remove_non_alphabetic,
+            Document.to_lower,
+        ],
     }
-    min_weight = {str(i): i for i in (2, 1)}
+    min_weight = {str(i): i for i in (3,)}
     knn_n_neighbors = {str(i): i for i in (0,)}
     return algorithms, categories, keywords, postprocessors, min_weight, knn_n_neighbors
 
 
 def params_2():
     algorithms = {'knn': run_knn}
-    categories = {'cat4': CATEGORIES_4, 'cat2': CATEGORIES_2}
-    keywords = {'playlists4': KEYWORDS_4, 'playlist2': KEYWORDS_2}
+    categories = {'cat4': CATEGORIES_4}
+    keywords = {'playlists4': KEYWORDS_4}
     postprocessors = {
         'lexical,syntactic': [
             Document.remove_non_alphabetic,
@@ -88,7 +94,7 @@ def params_2():
         ],
     }
     min_weight = {str(i): i for i in (2,)}
-    knn_n_neighbors = {str(i): i for i in (10, 7)}
+    knn_n_neighbors = {str(i): i for i in (5,)}
     return algorithms, categories, keywords, postprocessors, min_weight, knn_n_neighbors
 
 
