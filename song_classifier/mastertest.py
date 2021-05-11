@@ -45,7 +45,7 @@ def run_test(seed, name, function, parameters):
 
 
 def test(seed: int):
-    algorithms = {'knn': run_knn, 'cosine': run_cosine}
+    algorithms = {'cosine': run_cosine, 'knn': run_knn}
     categories = {'cat4': CATEGORIES_4, 'cat2': CATEGORIES_2}
     keywords = {'playlists4': KEYWORDS_4, 'playlist2': KEYWORDS_2}
     postprocessors = {
