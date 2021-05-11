@@ -183,6 +183,10 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
     train_lyrics, train_wordbags, train_titles = label_songs(training, postprocessors)
     test_lyrics, test_wordbags, test_titles = label_songs(testing, postprocessors)
 
+    train_wordbag_all = {*chain(*train_wordbags.values())}
+    test_wordbag_all = {*chain(*test_wordbags.values())}
+    wordbags_all = train_wordbag_all | test_wordbag_all
+
     print('Training')
 
     training_tf = get_all_tf(
@@ -191,7 +195,7 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
     )
     category_idfs: Dict[str, Dict[str, float]] = {}
     for cat in categories:
-        category_idfs[cat] = get_idf(train_wordbags[cat], train_lyrics[cat])
+        category_idfs[cat] = get_idf(wordbags_all, train_lyrics[cat])
 
     category_tf_idfs = {}
     category_vectors = {}
@@ -201,15 +205,17 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
             train_lyrics[cat], train_titles[cat],
         )
         category_vectors[cat] = get_tf_idf_category(
-            cat_tf_idf, train_wordbags[cat],
+            cat_tf_idf, wordbags_all,
         )
 
     from ..reflection import vector_distances
     print(vector_distances(category_vectors))
 
+    # from .knn import sparsematrix
+    # sparsematrix(category_vectors, wordbags_all, 'categories.csv')
+
     print('Testing')
 
-    test_wordbag_all = {*chain(*test_wordbags.values())}
     test_lyrics = [*chain(*test_lyrics.values())]
     test_titles = [*chain(*test_titles.values())]
 

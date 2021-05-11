@@ -45,10 +45,19 @@ def run_test(seed, name, function, parameters):
 
 
 def test(seed: int):
-    algorithms = {'cosine': run_cosine, 'knn': run_knn}
+    algorithms = {'knn': run_knn, 'cosine': run_cosine}
     categories = {'cat4': CATEGORIES_4, 'cat2': CATEGORIES_2}
     keywords = {'playlists4': KEYWORDS_4, 'playlist2': KEYWORDS_2}
     postprocessors = {
+        'lexical,syntactic': [
+            Document.remove_non_alphabetic,
+            Document.split_punctuation,
+            Document.strip_punctuation,
+            Document.to_lower,
+            Document.filter_stop_words,
+            Document.lemmatized,
+            Document.filter_by_pos,
+        ],
         'characters': [
             Document.split_punctuation,
             Document.strip_punctuation,
@@ -63,18 +72,9 @@ def test(seed: int):
             Document.filter_stop_words,
             Document.lemmatized,
         ],
-        'lexical,syntactic': [
-            Document.remove_non_alphabetic,
-            Document.split_punctuation,
-            Document.strip_punctuation,
-            Document.to_lower,
-            Document.filter_stop_words,
-            Document.lemmatized,
-            Document.filter_by_pos,
-        ],
     }
-    min_weight = {str(i): i for i in (1, 2)}
-    knn_n_neighbors = {str(i): i for i in (7, 10)}
+    min_weight = {str(i): i for i in (2, 1)}
+    knn_n_neighbors = {str(i): i for i in (10, 7)}
 
     jobs = []
 
