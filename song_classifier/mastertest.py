@@ -73,7 +73,7 @@ def params_1():
             Document.to_lower,
         ],
     }
-    min_weight = {str(i): i for i in (3,)}
+    min_weight = {str(i): i for i in (2,)}
     knn_n_neighbors = {str(i): i for i in (0,)}
     return algorithms, categories, keywords, postprocessors, min_weight, knn_n_neighbors
 
