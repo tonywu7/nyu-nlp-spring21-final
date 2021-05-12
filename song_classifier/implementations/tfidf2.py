@@ -369,3 +369,5 @@ def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs
     stats(predictions, ground_truths, categories)
     scores = score(predictions, ground_truths, categories)
     print_score(*scores)
+
+    return vectors
