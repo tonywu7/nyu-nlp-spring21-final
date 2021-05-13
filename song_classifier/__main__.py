@@ -12,93 +12,97 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
+import logging
 import random
-from importlib import import_module
-from pathlib import Path
+import sys
+from textwrap import dedent
 
 import click
-import simplejson as json
+import nltk
 
-from .app import Application
-from .util.importutil import iter_module_tree
+from .algorithms import cosine, knn2, tfidf2
+from .app import N_NEIGHBORS, TEXT_PROCESSORS, Application, get_settings
+from .collector import samples
+from .config import KEYWORDS_4
+from .scoring import print_score, score, stats
 from .util.logger import config_logging
 from .util.settings import Settings
 
 
+def init_nltk():
+    """Initialize nltk"""
+    nltk.download('punkt', quiet=True)
+    nltk.download('wordnet', quiet=True)
+    nltk.download('stopwords', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+
+
 @click.group()
-@click.option('-a', '--instance', required=True, type=click.Path(exists=True, file_okay=False))
+@click.option('-a', '--instance', required=True, type=click.Path(exists=True, file_okay=False),
+              help='Directory containing the song database with name `index.db`')
 @click.option('-v', '--verbose', is_flag=True, default=False)
-@click.option('-s', '--seed', type=click.INT, required=False)
 @click.pass_context
-def main(ctx, instance, verbose, seed=None):
-    if seed:
-        random.seed(seed)
+def main(ctx, instance, verbose):
     ctx.ensure_object(dict)
     config_logging(level=10 if verbose else 20)
     settings = Settings()
     settings['DB_ECHO'] = verbose
-    ctx.obj['SEED'] = seed
     Application(instance)
+    init_nltk()
 
 
-def find_commands():
-    for path in iter_module_tree(str(Path(__file__).parent), depth=2):
-        try:
-            ctl = import_module(f'.{".".join(path)}.cli', __package__)
-        except ModuleNotFoundError as e:
-            if e.name[:15] == 'song_classifier' and e.name[-3:] == 'cli':
-                continue
-            raise
-        cmd = getattr(ctl, 'COMMANDS', [])
-        for c in cmd:
-            main.add_command(c)
+ALGORITHMS = {
+    'cosine': cosine.run,
+    'knn': knn2.run,
+}
 
 
 @main.command()
-def cosine():
-    from .implementations.tfidf import run
-    for i in range(1):
-        print(f'Run #{i}')
-        run()
-
-
-@main.command()
-def knn():
-    from .implementations.knn import run
-    for i in range(1):
-        print(f'Run #{i}')
-        run()
-
-
-@main.command()
-@click.pass_context
-def master(ctx):
-    from .mastertest import test
-    test(ctx.obj['SEED'])
-
-
-@main.command()
-@click.option('-i', '--input-file', required=True)
-def mbz_artists(input_file):
-    from .web import collect_artists
-    with open(input_file, 'r') as f:
-        artists = json.load(f)
-    asyncio.run(collect_artists(artists))
-
-
-@main.command()
-@click.option('-i', '--input-dir', required=True)
-def nuclear(input_dir):
-    from .web import collect_songs
-    artists = []
-    for p in Path(input_dir).iterdir():
-        if p.suffix != '.json':
-            continue
-        with open(p) as f:
-            data = json.load(f)
-        artists.append((data['id'], data['name']))
-    asyncio.run(collect_songs(artists))
+@click.option('-s', '--seed', required=False, type=click.INT, default=None,
+              help='Random seed controlling training/testing set creation')
+@click.option('-r', '--training-set-ratio', required=False, type=click.FLOAT, default=.8,
+              help='Size ratio of training to testing dataset; decimal between 0 and 1')
+@click.option('-x', '--algorithm', required=False, type=click.Choice(['cosine', 'knn']), default='cosine',
+              help='The kind of classification function to use')
+@click.option('-p', '--preprocessors', required=False, type=click.Choice(tfidf2.PROCESSOR_PRESETS.keys()), default='lexical,syntactic',
+              help='Text preprocessor presets')
+@click.option('-m', '--min-playlists', required=False, type=click.INT, default=2,
+              help='Minimum number of playlists a song must appear in for it to enter the sample set')
+@click.option('-n', '--n-neighbors', required=False, type=click.INT, default=5,
+              help='(For k-NN only) k-NN N neighbors')
+def run_test(seed, training_set_ratio, algorithm, preprocessors, min_playlists, n_neighbors):
+    log = logging.getLogger('main')
+    if not seed:
+        seed = random.randrange(sys.maxsize)
+    RNG = random.Random(seed)
+    runner = ALGORITHMS.get(algorithm)
+    if not runner:
+        log.error(f'No such algorithm {algorithm}')
+        raise click.Abort()
+    processors = tfidf2.PROCESSOR_PRESETS.get(preprocessors)
+    if not processors:
+        log.error(f'No such preprocessor preset {preprocessors}')
+        raise click.Abort()
+    config = dedent(f"""\
+        Program config
+        random seed         = {seed}
+        algorithm           = {algorithm}
+        processors          = {preprocessors}
+        train/test ratio    = {training_set_ratio}
+        min playlist        = {min_playlists}
+        (kNN) N neighbors   = {n_neighbors}\
+    """)
+    log.info(config)
+    settings = get_settings()
+    settings[TEXT_PROCESSORS] = processors
+    settings[N_NEIGHBORS] = n_neighbors
+    training, testing = samples(RNG, training_set_ratio, KEYWORDS_4.keys(), KEYWORDS_4, min_playlists)
+    print('Dataset stats:')
+    for k in training.keys():
+        print(f'{k}: training={len(training[k])} testing={len(testing[k])}')
+    predictions, truths = runner(training, testing)
+    stats(predictions, truths, KEYWORDS_4.keys())
+    print_score(*score(predictions, truths, KEYWORDS_4.keys()))
 
 
 @main.command()

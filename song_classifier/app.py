@@ -60,3 +60,7 @@ def get_app() -> Application:
 
 def get_settings() -> Settings:
     return app.settings
+
+
+TEXT_PROCESSORS = 'TEXT_PROCESSORS'
+N_NEIGHBORS = 'N_NEIGHBORS'

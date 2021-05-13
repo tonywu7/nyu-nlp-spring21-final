@@ -78,7 +78,10 @@ def score(predictions: Dict[str, str], ground_truths: Dict[str, str], categories
         p, r, f = precisions[c], recall[c], fscore[c]
         percat[c] = (p, r, f)
 
-    accuracy = sum(tp.values()) / (sum(tp.values()) + .5 * (sum(fp.values()) + sum(fn.values())))
+    try:
+        accuracy = sum(tp.values()) / (sum(tp.values()) + .5 * (sum(fp.values()) + sum(fn.values())))
+    except ZeroDivisionError:
+        accuracy = float('nan')
 
     macro = {
         'precision': mean(precisions.values()),
@@ -86,11 +89,12 @@ def score(predictions: Dict[str, str], ground_truths: Dict[str, str], categories
         'f-score': mean(fscore.values()),
     }
 
-    weighted = {
-        'precision': sum(precisions[k] * counts[k] for k in categories) / sum(counts.values()),
-        'recall': sum(recall[k] * counts[k] for k in categories) / sum(counts.values()),
-        'f-score': sum(fscore[k] * counts[k] for k in categories) / sum(counts.values()),
-    }
+    weighted = {}
+    for name, stat in zip(('precisions', 'recall', 'fscore'), (precisions, recall, fscore)):
+        try:
+            weighted[name] = sum(stat[k] * counts[k] for k in categories) / sum(counts.values()),
+        except ZeroDivisionError:
+            weighted[name] = float('nan')
 
     return percat, macro, weighted, accuracy, confusion
 

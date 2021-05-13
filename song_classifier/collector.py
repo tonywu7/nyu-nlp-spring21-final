@@ -24,7 +24,26 @@ LabeledSongs = Dict[str, Songs]
 GroundTruths = Dict[str, str]
 
 
-def samples(sample_ratio: float, categories: List[str], keywords: Dict[str, List[str]], min_weight: int) -> Tuple[LabeledSongs, LabeledSongs]:
+def samples(RNG: random.Random, sample_ratio: float, categories: List[str],
+            keywords: Dict[str, List[str]], min_weight: int) -> Tuple[LabeledSongs, LabeledSongs]:
+    """Gather samples from database.
+
+    Parameters
+    ----------
+    sample_ratio : float
+        The ratio of samples to go into the training set vs. test set.
+    categories : List[str]
+        Category labels
+    keywords : Dict[str, List[str]]
+        Keywords for each categories to be used to retrieve playlists
+    min_weight : int
+        Minimum number of playlists a song to appear in for it to enter the samples
+
+    Returns
+    -------
+    Tuple[LabeledSongs, LabeledSongs]
+        Training/testing set, dictionaries of lists of songs mapped to labels
+    """
     db = get_db()
     playlists = {k: [*chain.from_iterable(db.playlist_title_search(t) for t in v)] for k, v in keywords.items()}
     songs_reversed: Dict[Song, Dict[str, List[Playlist]]] = defaultdict(lambda: defaultdict(list))
@@ -43,7 +62,7 @@ def samples(sample_ratio: float, categories: List[str], keywords: Dict[str, List
             if len(ps) >= min_weight:
                 # A song have a certain chance to go into the development set
                 # To reproduce the same sets, seed RNG
-                if random.random() < sample_ratio:
+                if RNG.random() < sample_ratio:
                     training[k].append(s)
                 else:
                     testing[k].append(s)

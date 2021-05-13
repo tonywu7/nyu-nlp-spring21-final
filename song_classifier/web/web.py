@@ -30,7 +30,7 @@ from bs4 import BeautifulSoup
 from decouple import config
 from more_itertools import chunked
 
-from .util.logger import colored
+from ..util.logger import colored
 
 
 def normalize_url(url: str) -> str:

@@ -12,18 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from itertools import chain
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Hashable, List, Set, Tuple
 
 import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.neighbors import KNeighborsClassifier
 
-from ..collector import samples
-from ..scoring import print_score, score, stats
-from .tfidf2 import (Document, DocumentCollection, init_nltk, process_cluster,
-                     tf_idf)
+from ..app import N_NEIGHBORS, TEXT_PROCESSORS, get_settings
+from ..database import Song
+from .tfidf2 import Document, DocumentCollection, process_cluster, tf_idf
 
 TFIDFVectors = Dict[str, Dict[str, float]]
 
@@ -67,22 +67,17 @@ def knn_classify(model: KNeighborsClassifier, features: Set[str], test_vectors: 
     return dict(zip(samples, labels))
 
 
-def run(ratio, categories, keywords, postprocessors, min_weight, knn_n_neighbors, *args, **kwargs):
-    init_nltk()
-
-    print('Loading songs', flush=True)
-
-    training, testing = samples(ratio, categories, keywords, min_weight)
-
-    print('Dataset stats:', flush=True)
-    for k in training.keys():
-        print(f'{k}: training={len(training[k])} testing={len(testing[k])}', flush=True)
+def run(training: Dict[str, List[Song]], testing: Dict[str, List[Song]]) -> Tuple[Dict[Hashable, str], Dict[Hashable, str]]:
+    log = logging.getLogger('cosine')
 
     metadocs = {k: [Document(s.lyrics, title=s.title, label=k) for s in ss] for k, ss in training.items()}
     testdocs = {k: [Document(s.lyrics, title=s.title, label=k) for s in ss] for k, ss in testing.items()}
 
+    log.info('Preprocessing text')
+    processors = get_settings()[TEXT_PROCESSORS]
+
     for doc in chain(*metadocs.values(), *testdocs.values()):
-        doc.postprocess_tokens(*postprocessors)
+        doc.postprocess_tokens(*processors)
         doc.calc_freq()
 
     vectors = DocumentCollection()
@@ -99,27 +94,20 @@ def run(ratio, categories, keywords, postprocessors, min_weight, knn_n_neighbors
     queries.calc_mag(vectors.idf)
     queries.calc_idf()
 
-    print('Calculating tf-idf', flush=True)
+    log.info('Calculating tf-idf')
 
     global_word_set = vectors.word_set & queries.word_set
 
     train_tfidf = {d.id: tf_idf(d, vectors.idf, global_word_set) for d in vectors}
     test_tfidf = {d.id: tf_idf(d, queries.idf, global_word_set) for d in queries}
 
-    test_truths = {d.id: d.label for d in queries}
-    # train_labels = {d.id: d.label for d in queries}
+    truths = {d.id: d.label for d in queries}
 
-    print('Fitting', flush=True)
+    log.info('Fitting')
+    knn_n_neighbors = get_settings()[N_NEIGHBORS]
     titlemap, model = knn_train(train_tfidf, global_word_set, [(d.id, d.label) for d in vectors], knn_n_neighbors)
-    # (pd.DataFrame([[k, train_labels[k]] for i, k in enumerate(titlemap)])
-    #  .to_csv('labels-training.csv', index=False, header=False))
 
-    print('Classifying', flush=True)
+    log.info('Classifying')
     predictions = dict(knn_classify(model, global_word_set, test_tfidf))
-    # (pd.DataFrame([[k, test_truths[k]] for i, k in enumerate(predictions)])
-    #  .to_csv('labels-testing.csv', index=False, header=False))
 
-    stats(predictions, test_truths, categories)
-    scores = score(predictions, test_truths, categories)
-    print_score(*scores)
-    # export(dict(predictions), test_truths)
+    return predictions, truths

@@ -1,7 +1,5 @@
 # NYU CS NLP 2021 Final Project
 
-## For collaborators
-
 **Setup**
 
 ```
@@ -13,6 +11,14 @@ To confirm you have all requirements installed, try printing the program version
 ```
 python3 -m song_classifier version
 ```
+
+**Running tests**
+
+```
+python3 -m song_classifier run-test
+```
+
+Use the `--help` option for descriptions of configurable parameters.
 
 **Playground**
 

@@ -17,22 +17,11 @@ import re
 import string
 import uuid
 from collections import defaultdict
-from itertools import chain
 from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 import nltk
 import pandas as pd
 from nltk.stem import WordNetLemmatizer
-
-from ..collector import samples
-from ..scoring import print_score, score, stats
-
-
-def init_nltk():
-    nltk.download('punkt', quiet=True)
-    nltk.download('wordnet', quiet=True)
-    nltk.download('stopwords', quiet=True)
-    nltk.download('averaged_perceptron_tagger', quiet=True)
 
 
 def term_frequencies(tokens: List[str], test: Callable[[str], bool] = lambda t: True,
@@ -276,18 +265,6 @@ def process_cluster(queries: DocumentCollection, documents: DocumentCollection):
         doc.calc_freq()
 
 
-def evaluate(queries: DocumentCollection, documents: DocumentCollection):
-    """Calculate similarity scores for all queries and documents."""
-    for q in queries:
-        scores: Dict[str, float] = {}
-        for d in documents:
-            s = similarity_tf_idf(q, d, documents.idf)
-            scores[d.label] = s
-        for d, s in sorted(scores.items(), key=lambda t: t[1], reverse=True):
-            yield q, d, s
-            break
-
-
 def tf_idf(q: Document, idf: Dict[str, int], word_set: Optional[Set[str]] = None) -> Dict[str, int]:
     word_set = word_set or q.word_set
     return {word: q.term_freq[word] * idf[word] for word in word_set}
@@ -312,62 +289,54 @@ def similarity_tf_idf(q: Document, d: Document, idf: Dict[str, int]) -> float:
         return 0.0
 
 
-def vector_distances(docs: DocumentCollection) -> pd.DataFrame:
+def pairwise_vector_sim(docs: DocumentCollection) -> pd.DataFrame:
+    """Calculate pairwise vector cosine similarities
+
+    Parameters
+    ----------
+    docs : DocumentCollection
+        A collection of Documents to calculate cosine similarities from
+
+    Returns
+    -------
+    pd.DataFrame
+        Matrix where [i, j] is the similarity between Document i and j
+    """
     keys = [d.label for d in docs]
     dist = pd.DataFrame(index=keys, columns=keys)
     for i in docs:
         for j in docs:
+            if not pd.isna(dist.loc[i.label, j.label]):
+                continue
             sim = similarity_tf_idf(i, j, docs.idf)
             dist.loc[i.label, j.label] = sim
+            dist.loc[j.label, i.label] = sim
     return dist
 
 
-def run(ratio, categories, keywords, postprocessors, min_weight, *args, **kwargs):
-    init_nltk()
-
-    print('Loading songs', flush=True)
-
-    training, testing = samples(ratio, categories, keywords, min_weight)
-
-    print('Dataset stats:', flush=True)
-    for k in training.keys():
-        print(f'{k}: training={len(training[k])} testing={len(testing[k])}', flush=True)
-
-    metadocs = {k: Document('\n '.join([s.lyrics for s in ss]), label=k) for k, ss in training.items()}
-    testdocs = {k: [Document(s.lyrics, title=s.title, label=k) for s in ss] for k, ss in testing.items()}
-
-    print('Training', flush=True)
-
-    for doc in chain(metadocs.values(), *testdocs.values()):
-        doc.postprocess_tokens(*postprocessors)
-        doc.calc_freq()
-
-    vectors = DocumentCollection()
-    for doc in metadocs.values():
-        vectors.add(doc)
-
-    queries = DocumentCollection()
-    for doc in chain(*testdocs.values()):
-        queries.add(doc)
-
-    vectors.calc_idf()
-    vectors.calc_mag(vectors.idf)
-    process_cluster(queries, vectors)
-    queries.calc_mag(vectors.idf)
-
-    print(vector_distances(vectors), flush=True)
-
-    print('Testing', flush=True)
-
-    predictions = {}
-    ground_truths = {}
-
-    for song, pred, conf in evaluate(queries, vectors):
-        predictions[song.id] = pred
-        ground_truths[song.id] = song.label
-
-    stats(predictions, ground_truths, categories)
-    scores = score(predictions, ground_truths, categories)
-    print_score(*scores)
-
-    return vectors
+PROCESSOR_PRESETS = {
+    'none': [],
+    'characters': [
+        Document.remove_non_alphabetic,
+        Document.split_punctuation,
+        Document.strip_punctuation,
+        Document.to_lower,
+    ],
+    'lexical': [
+        Document.remove_non_alphabetic,
+        Document.split_punctuation,
+        Document.strip_punctuation,
+        Document.to_lower,
+        Document.filter_stop_words,
+        Document.lemmatized,
+    ],
+    'lexical,syntactic': [
+        Document.remove_non_alphabetic,
+        Document.split_punctuation,
+        Document.strip_punctuation,
+        Document.to_lower,
+        Document.filter_stop_words,
+        Document.lemmatized,
+        Document.filter_by_pos,
+    ],
+}
